@@ -139,24 +139,65 @@ def generate_rules() -> list:
         ),
     }
 
-    # Add Minecraft-specific rule like original TypeScript
-    minecraft_rule = {
-        "description": f"{MARKER}: Change Backspace to Spacebar when Minecraft is focused",
+    # Add double-tap right Shift -> Caps Lock
+    double_shift_caps_lock = {
+        "description": f"{MARKER}: Change double tap right ⇧ key to caps lock",
         "manipulators": [
             {
-                "type": "basic",
-                "from": {"key_code": "delete_or_backspace"},
-                "to": [{"key_code": "spacebar"}],
                 "conditions": [
                     {
-                        "type": "frontmost_application_if",
-                        "file_paths": [
-                            "^/Users/mxstbr/Library/Application Support/minecraft/runtime/java-runtime-gamma/mac-os-arm64/java-runtime-gamma/jre.bundle/Contents/Home/bin/java$"
-                        ],
+                        "name": "right_shift pressed",
+                        "type": "variable_if",
+                        "value": 1,
                     }
                 ],
-            }
+                "from": {
+                    "key_code": "right_shift",
+                    "modifiers": {"optional": ["any"]},
+                },
+                "to": [{"key_code": "caps_lock"}],
+                "type": "basic",
+            },
+            {
+                "from": {
+                    "key_code": "right_shift",
+                    "modifiers": {"optional": ["any"]},
+                },
+                "to": [
+                    {
+                        "set_variable": {
+                            "name": "right_shift pressed",
+                            "value": 1,
+                        }
+                    },
+                    {"key_code": "right_shift"},
+                ],
+                "to_delayed_action": {
+                    "to_if_canceled": [
+                        {
+                            "set_variable": {
+                                "name": "right_shift pressed",
+                                "value": 0,
+                            }
+                        }
+                    ],
+                    "to_if_invoked": [
+                        {
+                            "set_variable": {
+                                "name": "right_shift pressed",
+                                "value": 0,
+                            }
+                        }
+                    ],
+                },
+                "type": "basic",
+            },
         ],
     }
 
-    return [base_rule.__dict__] + create_hyper_sublayers(sublayers, MARKER) + [minecraft_rule]
+    # Return all rules in final configuration
+    return [
+        base_rule.__dict__,
+        *create_hyper_sublayers(sublayers, MARKER),
+        double_shift_caps_lock,
+    ]

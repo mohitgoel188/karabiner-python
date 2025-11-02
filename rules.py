@@ -3,7 +3,7 @@ from models import Rule
 from utils import app, open_url, window, create_hyper_sublayers
 from raycast_utils import raycast
 
-MARKER = "PoweredX"
+MARKER = "GenX"
 
 
 def tuple_dict(pairs: list[tuple[str, dict]]) -> dict:
@@ -15,14 +15,12 @@ def tuple_dict(pairs: list[tuple[str, dict]]) -> dict:
             duplicates.append(key)
         seen[key] = action
     if duplicates:
-        print(
-            f"⚠️  Duplicate key(s) detected in sublayer definition: {', '.join(duplicates)}"
-        )
+        print(f"⚠️ Duplicate key(s) detected: {', '.join(duplicates)}")
     return seen
 
 
 def generate_rules() -> list:
-    """Generate full PoweredX Karabiner rules equivalent to original upload."""
+    """Generate PoweredX Karabiner rules with proper descriptions."""
     base_rule = Rule(
         description=f"{MARKER}: Hyper Key (⌃⌥⇧⌘)",
         manipulators=[
@@ -38,9 +36,7 @@ def generate_rules() -> list:
     )
 
     sublayers = {
-        # Spacebar
         "spacebar": raycast("stellate/mxstbr-commands", "create-notion-todo"),
-        # Browse
         "b": tuple_dict(
             [
                 ("t", open_url("https://twitter.com")),
@@ -51,34 +47,32 @@ def generate_rules() -> list:
                 ("h", open_url("https://hashnode.com/draft")),
             ]
         ),
-        # Open apps
         "o": tuple_dict(
             [
-                ("1", app("1Password")),
-                ("g", app("Google Chrome")),
-                ("c", app("Notion Calendar")),
+                # ("1", app("1Password")),
+                # ("g", app("Google Chrome")),
+                ("c", app("Visual Studio Code.app")),
                 ("v", app("Zed")),
-                ("d", app("Discord")),
                 ("s", app("Slack")),
-                ("e", app("Superhuman")),
-                ("n", app("Notion")),
-                ("t", app("Terminal")),
-                ("h", open_url("notion://www.notion.so/stellatehq/7b33b924746647499d906c55f89d5026")),
-                ("z", app("zoom.us")),
-                ("m", app("Reflect")),
-                ("r", app("Reflect")),
+                # ("e", app("Superhuman")),
+                ("t", app("iterm")),
+                # ("h", open_url("notion://www.notion.so/stellatehq/7b33b924746647499d906c55f89d5026")),
+                # ("z", app("zoom.us")),
+                # ("m", app("Reflect")),
+                # ("r", app("Reflect")),
                 ("f", app("Finder")),
-                ("i", app("Texts")),
-                ("p", app("Spotify")),
-                ("a", app("iA Presenter")),
-                ("w", open_url("Texts")),
-                ("l", raycast("stellate/mxstbr-commands", "open-mxs-is-shortlink")),
+                # ("i", app("Texts")),
+                # ("p", app("Spotify")),
+                # ("a", app("iA Presenter")),
+                ("p", app("pycharm.app")),
+                ("w", app("Whatsapp")),
+                # ("l", raycast("stellate/mxstbr-commands", "open-mxs-is-shortlink")),
+                ("x", app("Firefox"))
             ]
         ),
-        # Window management
         "w": tuple_dict(
             [
-                ("semicolon", {"to": [{"key_code": "h", "modifiers": ["right_command"]}]}),
+                ("semicolon", {"description": "Window: Hide", "to": [{"key_code": "h", "modifiers": ["right_command"]}]}),
                 ("y", window("previous-display")),
                 ("o", window("next-display")),
                 ("k", window("top-half")),
@@ -86,54 +80,51 @@ def generate_rules() -> list:
                 ("h", window("left-half")),
                 ("l", window("right-half")),
                 ("f", window("maximize")),
-                ("u", {"to": [{"key_code": "tab", "modifiers": ["right_control", "right_shift"]}]}),
-                ("i", {"to": [{"key_code": "tab", "modifiers": ["right_control"]}]}),
-                ("n", {"to": [{"key_code": "grave_accent_and_tilde", "modifiers": ["right_command"]}]}),
-                ("b", {"to": [{"key_code": "open_bracket", "modifiers": ["right_command"]}]}),
-                ("m", {"to": [{"key_code": "close_bracket", "modifiers": ["right_command"]}]}),
-                ("d", {"to": [{"key_code": "right_arrow", "modifiers": ["right_control", "right_option", "right_command"]}]}),
+                ("u", {"description": "Window: Previous Tab", "to": [{"key_code": "tab", "modifiers": ["right_control", "right_shift"]}]}),
+                ("i", {"description": "Window: Next Tab", "to": [{"key_code": "tab", "modifiers": ["right_control"]}]}),
+                ("n", {"description": "Window: Next Window", "to": [{"key_code": "grave_accent_and_tilde", "modifiers": ["right_command"]}]}),
+                ("b", {"description": "Window: Back", "to": [{"key_code": "open_bracket", "modifiers": ["right_command"]}]}),
+                ("m", {"description": "Window: Forward", "to": [{"key_code": "close_bracket", "modifiers": ["right_command"]}]}),
             ]
         ),
-        # System
         "s": tuple_dict(
             [
-                ("u", {"to": [{"key_code": "volume_increment"}]}),
-                ("j", {"to": [{"key_code": "volume_decrement"}]}),
-                ("i", {"to": [{"key_code": "display_brightness_increment"}]}),
-                ("k", {"to": [{"key_code": "display_brightness_decrement"}]}),
-                ("p", {"to": [{"key_code": "play_or_pause"}]}),
-                ("semicolon", {"to": [{"key_code": "fastforward"}]}),
+                ("u", {"description": "System: Volume Up", "to": [{"key_code": "volume_increment"}]}),
+                ("j", {"description": "System: Volume Down", "to": [{"key_code": "volume_decrement"}]}),
+                ("i", {"description": "System: Brightness Up", "to": [{"key_code": "display_brightness_increment"}]}),
+                ("k", {"description": "System: Brightness Down", "to": [{"key_code": "display_brightness_decrement"}]}),
+                ("l", {"description": "System: Quit App", "to": [{"key_code": "q", "modifiers": ["right_control", "right_command"]}]}),
+                ("p", {"description": "System: Play/Pause", "to": [{"key_code": "play_or_pause"}]}),
+                ("semicolon", {"description": "System: Next Track", "to": [{"key_code": "fastforward"}]}),
                 ("e", raycast("thomas/elgato-key-light", "toggle", background=True)),
                 ("d", raycast("yakitrak/do-not-disturb", "toggle", background=True)),
                 ("t", raycast("raycast/system", "toggle-system-appearance")),
                 ("c", raycast("raycast/system", "open-camera")),
-                ("v", {"to": [{"key_code": "spacebar", "modifiers": ["left_option"]}]}),
+                ("v", {"description": "System: Voice", "to": [{"key_code": "spacebar", "modifiers": ["left_option"]}]}),
             ]
         ),
-        # Vim
         "v": tuple_dict(
             [
                 ("h", {"to": [{"key_code": "left_arrow"}]}),
                 ("j", {"to": [{"key_code": "down_arrow"}]}),
                 ("k", {"to": [{"key_code": "up_arrow"}]}),
                 ("l", {"to": [{"key_code": "right_arrow"}]}),
+                ("m", {"description": "Move: Magicmove (Homerow)", "to": [{"key_code": "f", "modifiers": ["right_control"]}]}),
+                ("s", {"description": "Move: Scroll Mode (Homerow)", "to": [{"key_code": "j", "modifiers": ["right_control"]}]}),
+                ("d", {"description": "Move: Vim Easymotion", "to": [{"key_code": "d", "modifiers": ["right_shift", "right_command"]}]}),
                 ("u", {"to": [{"key_code": "page_down"}]}),
                 ("i", {"to": [{"key_code": "page_up"}]}),
             ]
         ),
-        # Control Media
         "c": tuple_dict(
             [
-                ("p", {"to": [{"key_code": "play_or_pause"}]}),
-                ("n", {"to": [{"key_code": "fastforward"}]}),
-                ("b", {"to": [{"key_code": "rewind"}]}),
+                ("p", {"description": "Music: Play/Pause", "to": [{"key_code": "play_or_pause"}]}),
+                ("n", {"description": "Music: Next Track", "to": [{"key_code": "fastforward"}]}),
+                ("b", {"description": "Music: Previous Track", "to": [{"key_code": "rewind"}]}),
             ]
         ),
-        # Raycast
         "r": tuple_dict(
             [
-                ("1", raycast("VladCuciureanu/toothpick", "connect-favorite-device-1")),
-                ("2", raycast("VladCuciureanu/toothpick", "connect-favorite-device-2")),
                 ("c", raycast("thomas/color-picker", "pick-color")),
                 ("n", open_url("raycast://script-commands/dismiss-notifications")),
                 ("l", raycast("stellate/mxstbr-commands", "create-mxs-is-shortlink")),
@@ -142,8 +133,30 @@ def generate_rules() -> list:
                 ("a", raycast("raycast/raycast-ai", "ai-chat")),
                 ("s", raycast("peduarte/silent-mention", "index")),
                 ("h", raycast("raycast/clipboard-history", "clipboard-history")),
+                ("1", raycast("VladCuciureanu/toothpick", "toggle-favorite-device-1")),
+                ("2", raycast("VladCuciureanu/toothpick", "toggle-favorite-device-2")),
             ]
         ),
     }
 
-    return [base_rule.__dict__] + create_hyper_sublayers(sublayers, MARKER)
+    # Add Minecraft-specific rule like original TypeScript
+    minecraft_rule = {
+        "description": f"{MARKER}: Change Backspace to Spacebar when Minecraft is focused",
+        "manipulators": [
+            {
+                "type": "basic",
+                "from": {"key_code": "delete_or_backspace"},
+                "to": [{"key_code": "spacebar"}],
+                "conditions": [
+                    {
+                        "type": "frontmost_application_if",
+                        "file_paths": [
+                            "^/Users/mxstbr/Library/Application Support/minecraft/runtime/java-runtime-gamma/mac-os-arm64/java-runtime-gamma/jre.bundle/Contents/Home/bin/java$"
+                        ],
+                    }
+                ],
+            }
+        ],
+    }
+
+    return [base_rule.__dict__] + create_hyper_sublayers(sublayers, MARKER) + [minecraft_rule]

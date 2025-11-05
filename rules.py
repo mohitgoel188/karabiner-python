@@ -195,9 +195,44 @@ def generate_rules() -> list:
         ],
     }
 
+    swap_cmd_ctrl_rule = {
+        "description": f"{MARKER}: Swap Command and Control in PyCharm",
+        "manipulators": [
+            {
+                "type": "basic",
+                "from": {"key_code": "left_command"},
+                "to": [{"key_code": "left_control"}],
+                "conditions": [
+                    {
+                        "type": "frontmost_application_if",
+                        "bundle_identifiers": [
+                            "^com\\.jetbrains\\.pycharm$",
+                            # "^com\\.microsoft\\.VSCode$",
+                        ],
+                    }
+                ],
+            },
+            {
+                "type": "basic",
+                "from": {"key_code": "left_control"},
+                "to": [{"key_code": "left_command"}],
+                "conditions": [
+                    {
+                        "type": "frontmost_application_if",
+                        "bundle_identifiers": [
+                            "^com\\.jetbrains\\.pycharm$",
+                            # "^com\\.microsoft\\.VSCode$",
+                        ],
+                    }
+                ],
+            },
+        ],
+    }
+
     # Return all rules in final configuration
     return [
         base_rule.__dict__,
         *create_hyper_sublayers(sublayers, MARKER),
         double_shift_caps_lock,
+        swap_cmd_ctrl_rule
     ]

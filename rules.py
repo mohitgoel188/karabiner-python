@@ -55,7 +55,7 @@ def generate_rules() -> list:
                 ("v", app("Zed")),
                 ("s", app("Slack")),
                 # ("e", app("Superhuman")),
-                ("t", app("iterm")),
+                ("i", app("iterm")),
                 # ("h", open_url("notion://www.notion.so/stellatehq/7b33b924746647499d906c55f89d5026")),
                 # ("z", app("zoom.us")),
                 # ("m", app("Reflect")),
@@ -229,10 +229,29 @@ def generate_rules() -> list:
         ],
     }
 
+    open_iterm_shortcut = {
+        "description": f"{MARKER}: Open iTerm with ⌘ + ⌃ + T",
+        "manipulators": [
+            {
+                "type": "basic",
+                "from": {
+                    "key_code": "t",
+                    "modifiers": {"mandatory": ["left_command", "left_control"]},
+                },
+                "to": [
+                    {
+                        "shell_command": "open -a iTerm.app"
+                    }
+                ],
+            }
+        ],
+    }
+
     # Return all rules in final configuration
     return [
         base_rule.__dict__,
         *create_hyper_sublayers(sublayers, MARKER),
         double_shift_caps_lock,
-        swap_cmd_ctrl_rule
+        swap_cmd_ctrl_rule,
+        open_iterm_shortcut
     ]

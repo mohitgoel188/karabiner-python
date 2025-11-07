@@ -226,6 +226,14 @@ You’re free to fork, modify, and share — just keep it open.
 
 ---
 
+## 🙏 Acknowledgments
+
+Special thanks to:
+- Jesse Skelton's [Video Tutorials](https://youtu.be/uaJSjgVEhMQ?si=2olcwLeZQ3q7AtJQ)
+- MXSTBR’s [Karabiner Repo](https://github.com/mxstbr/karabiner)
+
+---
+
 ## ❤️ Contributing
 
 Contributions are welcome!

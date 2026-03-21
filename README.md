@@ -1,40 +1,50 @@
-# 🧠 PoweredX Karabiner Config (Python Edition)
+# PoweredX Karabiner Config (Python Edition)
 
 A fully modular, Python-based **Karabiner-Elements configuration builder** that mirrors and extends the functionality of the [original](github.com/mxstbr/karabiner/) TypeScript `rules.ts` setup — with added flexibility, safety, and readability.
 
 ---
 
-## 🚀 Features
+## Features
 
-- ✅ Generate **complex Karabiner rules** using Python
-- 🧩 Define **Hyper key layers** programmatically (`b`, `o`, `w`, `s`, etc.)
-- ⚙️ Non-destructive updates to existing `karabiner.json`
-- 🧠 Detect duplicate layer keys automatically
-- 💡 Pretty print configuration using `rich`
-- 🧱 Modular design — easy to customize, extend, or integrate
-- 💾 Stores configuration under `karabiner/karabiner.json`
-- 🪶 Compatible with **Ruff** (PEP 8 + clean imports)
+- Generate **complex Karabiner rules** using Python
+- Define **Hyper key layers** programmatically (`b`, `o`, `w`, `s`, etc.)
+- Non-destructive updates to existing `karabiner.json`
+- Detect duplicate layer keys automatically
+- Pretty print configuration using `rich`
+- Modular design — easy to customize, extend, or integrate
+- Stores configuration under `karabiner/karabiner.json`
+- Compatible with **Ruff** (PEP 8 + clean imports)
 
 ---
 
-## 🧰 Project Structure
+## Project Structure
 
 ```
 karabiner-python/
+├── build.py                  # CLI entry point — merges/overrides karabiner.json
 │
-├── build.py             # Build and merge karabiner.json profiles
-├── rules.py             # Defines all Hyper layers and key mappings
-├── models.py            # Dataclasses defining rule structures
-├── utils.py             # App/window/shell helper utilities
-├── raycast_utils.py     # Raycast-specific helpers
-├── show_config.py       # Pretty display of generated config
+├── src/
+│   ├── models.py             # Rule dataclass
+│   ├── helpers.py            # app(), open_url(), window(), swap_cmd_ctrl(), tuple_dict()
+│   ├── raycast.py            # raycast() deep-link helper
+│   ├── engine.py             # create_hyper_sublayers() — core sublayer transform
+│   └── rules/
+│       ├── __init__.py       # generate_rules() — assembles everything, exports MARKER
+│       ├── sublayers.py      # Sublayer key mappings (b, o, w, s, v, c, r)
+│       ├── hyper.py          # Hyper base key + double-shift caps lock
+│       └── pycharm.py        # PyCharm-specific key swaps
+│
+├── viewers/
+│   ├── show_config.py        # Rich table viewer
+│   └── show_config_html.py   # Interactive HTML viewer
+│
 └── karabiner/
-    └── karabiner.json   # Generated output (auto-created)
+    └── karabiner.json        # Generated output (auto-created, gitignored)
 ```
 
 ---
 
-## ⚙️ Installation
+## Installation
 
 1. **Clone the repo**
    ```bash
@@ -48,7 +58,7 @@ karabiner-python/
 
 ---
 
-## 🏗️ Building the Configuration
+## Building the Configuration
 
 To generate or update your Karabiner config:
 
@@ -79,35 +89,26 @@ python build.py --dry-run --verbose
 
 ---
 
-## 🔍 Viewing the Configuration
+## Viewing the Configuration
 
-Use the built-in visualizer to display your config in a clean, structured way:
-
-```bash
-python show_config.py
-```
-
-You can also filter by **specific layers**:
+Use the built-in viewers to display your config:
 
 ```bash
-python show_config.py -l o
-```
+# Rich table viewer (all layers)
+python -m viewers.show_config
 
-Example output:
-```
-Layer: O (Open)
-────────────────────────────
-Shortcut | Function                     | Action
-o+g      | Open Google Chrome           | 🖥️ open -a 'Google Chrome.app'
-o+s      | Open Slack                   | 🖥️ open -a 'Slack.app'
-...
+# Single layer
+python -m viewers.show_config -l o
+
+# Interactive HTML viewer
+python -m viewers.show_config_html
 ```
 
 ---
 
-## 🧩 Customization Guide
+## Customization Guide
 
-You can easily add or modify key layers in `rules.py`.
+You can easily add or modify key layers in `src/rules/sublayers.py`.
 
 Example:
 
@@ -127,13 +128,16 @@ python build.py --override
 
 ---
 
-## 🧱 Extending Rules
+## Extending Rules
 
-- **To add new window actions:**  
-  Update the `window()` helper in `utils.py`
-  
-- **To add new Raycast actions:**  
-  Use the `raycast()` helper from `raycast_utils.py`
+- **To add new app/URL/window actions:**
+  Use the helpers in `src/helpers.py`
+
+- **To add new Raycast actions:**
+  Use the `raycast()` helper from `src/raycast.py`
+
+- **To add app-specific key swaps:**
+  Create a new file in `src/rules/` (see `pycharm.py` as an example)
 
 Example:
 ```python
@@ -142,13 +146,13 @@ raycast("raycast/system", "toggle-dark-mode", background=True)
 
 ---
 
-## 🧼 Linting and Style
+## Linting and Style
 
-This project follows **Ruff’s default rules**:
+This project follows **Ruff's default rules**:
 
 - PEP8 compliant
 - No unused imports
-- Line length ≤ 88
+- Line length <= 88
 - Consistent double quotes
 
 You can check formatting with:
@@ -159,14 +163,14 @@ ruff check .
 
 ---
 
-## 💾 Output Location
+## Output Location
 
 All configuration files are stored in:
 ```
 karabiner/karabiner.json
 ```
 
-To use this with **Karabiner-Elements**, copy the file to:
+To use this with **Karabiner-Elements**, symlink or copy the file to:
 
 ```
 ~/.config/karabiner/karabiner.json
@@ -174,7 +178,7 @@ To use this with **Karabiner-Elements**, copy the file to:
 
 ---
 
-## 🧠 Example Profiles
+## Profiles
 
 | Profile | Description |
 |----------|--------------|
@@ -183,7 +187,7 @@ To use this with **Karabiner-Elements**, copy the file to:
 
 ---
 
-## 🧰 Utilities Overview
+## Utilities Overview
 
 | Helper | Purpose |
 |---------|----------|
@@ -191,50 +195,51 @@ To use this with **Karabiner-Elements**, copy the file to:
 | `open_url("https://example.com")` | Open a URL |
 | `window("left-half")` | Trigger Rectangle window action |
 | `raycast("ext/path", "command")` | Trigger Raycast command |
-| `shell("echo hi")` | Run custom shell command |
+| `swap_cmd_ctrl("d", MARKER)` | Swap Cmd+D and Ctrl+D globally |
 
 ---
 
-## 💡 Developer Notes
+## Developer Notes
 
 - Each sublayer is defined as a Python dictionary of key mappings.
 - Duplicate keys within a layer will trigger a console warning.
 - Merging logic is designed to preserve community rules automatically.
-- All layers are prefixed with a global **Hyper Key** (`⌃⌥⇧⌘`).
+- All layers are prefixed with a global **Hyper Key** (`Ctrl+Opt+Shift+Cmd`).
+- All shell commands are quoted with `shlex.quote()` for safety.
 
 ---
 
-## 🪄 Example Workflow
+## Example Workflow
 
-1. Modify `rules.py` → add or tweak mappings  
+1. Modify `src/rules/sublayers.py` — add or tweak mappings
 2. Run build:
    ```bash
    python build.py --override
    ```
 3. Preview config:
    ```bash
-   python show_config.py
+   python -m viewers.show_config
    ```
-4. Copy `karabiner/karabiner.json` to your Karabiner config directory.
+4. Karabiner picks up changes via the symlink automatically.
 
 ---
 
-## 📜 License
+## License
 
-MIT License © 2025  
-You’re free to fork, modify, and share — just keep it open.
+MIT License (c) 2025
+You're free to fork, modify, and share — just keep it open.
 
 ---
 
-## 🙏 Acknowledgments
+## Acknowledgments
 
 Special thanks to:
 - Jesse Skelton's [Video Tutorials](https://youtu.be/uaJSjgVEhMQ?si=2olcwLeZQ3q7AtJQ)
-- MXSTBR’s [Karabiner Repo](https://github.com/mxstbr/karabiner)
+- MXSTBR's [Karabiner Repo](https://github.com/mxstbr/karabiner)
 
 ---
 
-## ❤️ Contributing
+## Contributing
 
 Contributions are welcome!
 
@@ -244,7 +249,3 @@ If you:
 - Enhance visualization
 
 Please open a PR with your changes.
-
----
-
-**Built with Python 🐍, Tea ☕, and Karabiner ❤️**

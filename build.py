@@ -3,7 +3,7 @@ import argparse
 import json
 from pathlib import Path
 
-from rules import generate_rules, MARKER
+from src.rules import generate_rules, MARKER
 
 
 def ensure_default_profile(profiles: list) -> None:
@@ -32,7 +32,14 @@ def modify_existing_karabiner(
 ) -> None:
     """Safely merge or override PoweredX rules in karabiner/karabiner.json."""
     path = get_karabiner_path()
-    config = json.loads(path.read_text()) if path.exists() else {"profiles": []}
+    if path.exists():
+        try:
+            config = json.loads(path.read_text())
+        except json.JSONDecodeError as e:
+            print(f"Error: {path} contains invalid JSON: {e}")
+            return
+    else:
+        config = {"profiles": []}
     profiles = config.get("profiles", [])
     ensure_default_profile(profiles)
 

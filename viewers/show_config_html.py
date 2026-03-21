@@ -1,0 +1,1797 @@
+"""Generate an interactive HTML visualization of PoweredX Karabiner rules."""
+
+import json
+import os
+import webbrowser
+
+from src.rules import generate_rules
+
+QWERTY_ROWS = [
+    ["grave_accent_and_tilde", "1", "2", "3", "4", "5", "6", "7", "8", "9", "0", "hyphen", "equal_sign"],
+    ["q", "w", "e", "r", "t", "y", "u", "i", "o", "p", "open_bracket", "close_bracket", "backslash"],
+    ["a", "s", "d", "f", "g", "h", "j", "k", "l", "semicolon", "quote"],
+    ["z", "x", "c", "v", "b", "n", "m", "comma", "period", "slash"],
+    ["spacebar"],
+]
+
+KEY_LABELS = {
+    "grave_accent_and_tilde": "`",
+    "hyphen": "-",
+    "equal_sign": "=",
+    "open_bracket": "[",
+    "close_bracket": "]",
+    "backslash": "\\",
+    "semicolon": ";",
+    "quote": "'",
+    "comma": ",",
+    "period": ".",
+    "slash": "/",
+    "spacebar": "Space",
+    "return_or_enter": "Enter",
+    "left_command": "Cmd",
+    "left_control": "Ctrl",
+    "left_option": "Opt",
+    "left_shift": "Shift",
+    "right_shift": "R Shift",
+    "caps_lock": "Caps",
+    "escape": "Esc",
+    "tab": "Tab",
+    "delete_or_backspace": "Del",
+}
+
+MODIFIER_SYMBOLS = {
+    "left_command": "\u2318",
+    "right_command": "\u2318",
+    "left_control": "\u2303",
+    "right_control": "\u2303",
+    "left_option": "\u2325",
+    "right_option": "\u2325",
+    "left_shift": "\u21e7",
+    "right_shift": "\u21e7",
+}
+
+LAYER_COLORS = {
+    "b": {"from": "#3b82f6", "to": "#06b6d4", "label": "Bookmarks"},
+    "o": {"from": "#8b5cf6", "to": "#a855f7", "label": "Open Apps"},
+    "w": {"from": "#f59e0b", "to": "#ef4444", "label": "Window Mgmt"},
+    "s": {"from": "#10b981", "to": "#14b8a6", "label": "System"},
+    "v": {"from": "#ec4899", "to": "#f43f5e", "label": "Vim Nav"},
+    "c": {"from": "#06b6d4", "to": "#3b82f6", "label": "Music"},
+    "r": {"from": "#f97316", "to": "#eab308", "label": "Raycast"},
+    "spacebar": {"from": "#6366f1", "to": "#8b5cf6", "label": "Quick Action"},
+}
+
+
+def _friendly_key(key_code: str) -> str:
+    return KEY_LABELS.get(key_code, key_code.upper() if len(key_code) == 1 else key_code)
+
+
+def _friendly_mods(mods: list[str]) -> str:
+    return "".join(MODIFIER_SYMBOLS.get(m, m) for m in mods)
+
+
+def _describe_action(action: dict) -> str:
+    if "shell_command" in action:
+        cmd = action["shell_command"]
+        if cmd.startswith("open -a"):
+            return f"App: {cmd.split('open -a ')[-1].replace('.app', '').strip(chr(39))}"
+        if cmd.startswith("open http"):
+            return f"URL: {cmd.replace('open ', '')}"
+        if "raycast://" in cmd:
+            parts = cmd.split("/")
+            ext = parts[-2] if len(parts) >= 2 else ""
+            command = parts[-1].split("?")[0] if parts else ""
+            return f"Raycast: {ext}/{command}"
+        if "rectangle://" in cmd:
+            name = cmd.split("name=")[-1] if "name=" in cmd else cmd
+            return f"Window: {name}"
+        return f"Shell: {cmd[:40]}"
+    if "key_code" in action:
+        mods = action.get("modifiers", [])
+        mod_str = _friendly_mods(mods) if mods else ""
+        return f"Key: {mod_str}{_friendly_key(action['key_code'])}"
+    if "set_variable" in action:
+        return "Toggle sublayer"
+    if isinstance(action, str):
+        return action[:50]
+    desc = action.get("description", "")
+    to = action.get("to", [])
+    if desc and to:
+        to_action = to[0] if to else {}
+        if isinstance(to_action, dict) and "key_code" in to_action:
+            mods = to_action.get("modifiers", [])
+            mod_str = _friendly_mods(mods) if mods else ""
+            key_str = _friendly_key(to_action["key_code"])
+            label = desc.split(": ", 1)[-1] if ": " in desc else desc
+            return f"{label} ({mod_str}{key_str})"
+        return desc.split(": ", 1)[-1] if ": " in desc else desc
+    if desc:
+        return desc.split(": ", 1)[-1] if ": " in desc else desc
+    return str(action)[:50]
+
+
+def extract_sublayers(rules: list) -> dict:
+    sublayers = {}
+    for rule in rules:
+        desc = rule.get("description", "")
+        if "Hyper Key sublayer" not in desc:
+            continue
+        name = desc.split("'")[-2] if "'" in desc else desc
+        mappings = {}
+        for manip in rule.get("manipulators", []):
+            from_key = manip.get("from", {}).get("key_code", "")
+            if from_key == name:
+                continue
+            to_list = manip.get("to", [])
+            if not to_list:
+                continue
+            action = to_list[0]
+            mappings[from_key] = _describe_action(action)
+        sublayers[name] = mappings
+    return sublayers
+
+
+def extract_standalone_rules(rules: list) -> list:
+    standalone = []
+    for rule in rules:
+        desc = rule.get("description", "")
+        if "Hyper Key sublayer" in desc or "Hyper Key (" in desc:
+            continue
+        manipulators = rule.get("manipulators", [])
+        entries = []
+        for m in manipulators:
+            from_key = m.get("from", {}).get("key_code", "")
+            from_mods = m.get("from", {}).get("modifiers", {})
+            mandatory = from_mods.get("mandatory", []) if isinstance(from_mods, dict) else []
+            to_list = m.get("to", [])
+            conditions = m.get("conditions", [])
+            app_scope = "Global"
+            for c in conditions:
+                bundles = c.get("bundle_identifiers", [])
+                if bundles:
+                    app_scope = ", ".join(
+                        b.replace("^com\\.", "").replace("$", "").replace("\\.", ".")
+                        for b in bundles
+                    )
+
+            trigger = _friendly_mods(mandatory) + _friendly_key(from_key)
+            if to_list:
+                action = _describe_action(to_list[0])
+            else:
+                action = "N/A"
+            entries.append({"trigger": trigger, "action": action, "scope": app_scope})
+        standalone.append({"description": desc.replace("GenX: ", ""), "entries": entries})
+    return standalone
+
+
+def generate_html(sublayers: dict, standalone: list) -> str:
+    sublayers_json = json.dumps(sublayers)
+    standalone_json = json.dumps(standalone)
+    keyboard_json = json.dumps(QWERTY_ROWS)
+    key_labels_json = json.dumps(KEY_LABELS)
+    layer_colors_json = json.dumps(LAYER_COLORS)
+
+    return f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PoweredX - Karabiner Config Visualizer</title>
+<style>
+  :root {{
+    --bg: #0a0a0f;
+    --bg-card: #111118;
+    --bg-card-hover: #16161f;
+    --border: #1e1e2e;
+    --border-hover: #2e2e4e;
+    --text: #e4e4ef;
+    --text-muted: #6e6e8e;
+    --accent-from: #9E7AFF;
+    --accent-to: #FE8BBB;
+  }}
+
+  * {{ margin: 0; padding: 0; box-sizing: border-box; }}
+
+  body {{
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }}
+
+  /* Animated grid background */
+  .grid-bg {{
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(255,255,255,0.015) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,0.015) 1px, transparent 1px);
+    background-size: 60px 60px;
+    z-index: 0;
+    pointer-events: none;
+  }}
+
+  .container {{
+    position: relative;
+    z-index: 1;
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 40px 24px 80px;
+  }}
+
+  /* Header with gradient text */
+  .header {{
+    text-align: center;
+    margin-bottom: 48px;
+  }}
+
+  .header h1 {{
+    font-size: 3rem;
+    font-weight: 800;
+    letter-spacing: -0.03em;
+    background: linear-gradient(135deg, var(--accent-from), var(--accent-to));
+    background-size: 300% 300%;
+    animation: gradient-shift 4s ease infinite;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }}
+
+  .header p {{
+    color: var(--text-muted);
+    font-size: 1.05rem;
+    margin-top: 8px;
+  }}
+
+  @keyframes gradient-shift {{
+    0%, 100% {{ background-position: 0% 50%; }}
+    50% {{ background-position: 100% 50%; }}
+  }}
+
+  /* Tabs */
+  .tabs {{
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    justify-content: center;
+    margin-bottom: 36px;
+  }}
+
+  .tab {{
+    padding: 8px 18px;
+    border-radius: 9999px;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--text-muted);
+    font-size: 0.85rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.25s ease;
+    position: relative;
+    overflow: hidden;
+  }}
+
+  .tab:hover {{
+    border-color: var(--border-hover);
+    color: var(--text);
+    background: var(--bg-card);
+  }}
+
+  .tab.active {{
+    color: #fff;
+    border-color: transparent;
+  }}
+
+  .tab .label {{ position: relative; z-index: 1; }}
+
+  /* Search */
+  .search-wrap {{
+    display: flex;
+    justify-content: center;
+    margin-bottom: 32px;
+  }}
+
+  .search-input {{
+    width: 100%;
+    max-width: 400px;
+    padding: 10px 16px 10px 40px;
+    border-radius: 12px;
+    border: 1px solid var(--border);
+    background: var(--bg-card);
+    color: var(--text);
+    font-size: 0.9rem;
+    outline: none;
+    transition: border-color 0.2s;
+  }}
+
+  .search-input:focus {{
+    border-color: var(--accent-from);
+  }}
+
+  .search-wrap .icon {{
+    position: absolute;
+    left: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--text-muted);
+    font-size: 1rem;
+  }}
+
+  /* Keyboard */
+  .keyboard {{
+    margin: 0 auto 40px;
+    max-width: 1100px;
+  }}
+
+  .kb-row {{
+    display: flex;
+    justify-content: center;
+    gap: 5px;
+    margin-bottom: 5px;
+  }}
+
+  .kb-key {{
+    position: relative;
+    min-width: 76px;
+    height: 64px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--bg-card);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    cursor: default;
+    transition: all 0.2s ease;
+    overflow: hidden;
+    padding: 4px 6px;
+  }}
+
+  .kb-key.spacebar {{
+    min-width: 320px;
+  }}
+
+  .kb-key.active {{
+    border-color: transparent;
+    color: #fff;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+  }}
+
+  .kb-key.active::before {{
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    opacity: 0.15;
+  }}
+
+  /* Border beam effect on active keys */
+  .kb-key.active::after {{
+    content: '';
+    position: absolute;
+    inset: -1px;
+    border-radius: inherit;
+    padding: 1px;
+    background: linear-gradient(var(--key-from, var(--accent-from)), var(--key-to, var(--accent-to)));
+    -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+  }}
+
+  .kb-key .key-label {{
+    position: relative;
+    z-index: 2;
+  }}
+
+  .kb-key .key-action {{
+    position: relative;
+    z-index: 2;
+    font-size: 0.62rem;
+    font-weight: 400;
+    max-width: 68px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    opacity: 0.9;
+    margin-top: 2px;
+  }}
+
+  /* Category dot on key */
+  .kb-key .cat-dot {{
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    z-index: 3;
+  }}
+
+  /* Legend */
+  .kb-legend {{
+    display: flex;
+    justify-content: center;
+    gap: 16px;
+    flex-wrap: wrap;
+    margin-bottom: 12px;
+  }}
+
+  .legend-item {{
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.72rem;
+    color: var(--text-muted);
+  }}
+
+  .legend-dot {{
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }}
+
+  .kb-key.trigger-key {{
+    border-color: transparent;
+    box-shadow: 0 0 20px rgba(158, 122, 255, 0.3);
+  }}
+
+  .kb-key.trigger-key::after {{
+    content: '';
+    position: absolute;
+    inset: -1px;
+    border-radius: inherit;
+    padding: 1.5px;
+    background: linear-gradient(135deg, var(--accent-from), var(--accent-to));
+    -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    animation: border-pulse 2s ease-in-out infinite;
+  }}
+
+  @keyframes border-pulse {{
+    0%, 100% {{ opacity: 1; }}
+    50% {{ opacity: 0.5; }}
+  }}
+
+  /* Tooltip */
+  .tooltip {{
+    position: fixed;
+    padding: 8px 14px;
+    background: #1a1a2e;
+    border: 1px solid var(--border-hover);
+    border-radius: 8px;
+    font-size: 0.8rem;
+    color: var(--text);
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.15s;
+    z-index: 100;
+    max-width: 300px;
+    box-shadow: 0 8px 30px rgba(0,0,0,0.4);
+  }}
+
+  .tooltip.visible {{ opacity: 1; }}
+
+  /* Magic Card - spotlight effect */
+  .magic-card {{
+    position: relative;
+    border-radius: 16px;
+    border: 1px solid var(--border);
+    background: var(--bg-card);
+    overflow: hidden;
+    transition: border-color 0.3s;
+  }}
+
+  .magic-card:hover {{
+    border-color: var(--border-hover);
+  }}
+
+  .magic-card .spotlight {{
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    transition: opacity 0.3s;
+    pointer-events: none;
+    z-index: 0;
+  }}
+
+  .magic-card:hover .spotlight {{
+    opacity: 1;
+  }}
+
+  .magic-card .card-content {{
+    position: relative;
+    z-index: 1;
+    padding: 24px;
+  }}
+
+  /* Sections */
+  .section-title {{
+    font-size: 1.3rem;
+    font-weight: 700;
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }}
+
+  .section-title .dot {{
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--accent-from);
+    animation: dot-pulse 2s ease-in-out infinite;
+  }}
+
+  @keyframes dot-pulse {{
+    0%, 100% {{ opacity: 1; transform: scale(1); }}
+    50% {{ opacity: 0.5; transform: scale(0.8); }}
+  }}
+
+  /* Mapping list */
+  .mapping-grid {{
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 8px;
+  }}
+
+  .mapping-item {{
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 14px;
+    border-radius: 10px;
+    background: rgba(255,255,255,0.02);
+    border: 1px solid transparent;
+    transition: all 0.2s;
+  }}
+
+  .mapping-item:hover {{
+    background: rgba(255,255,255,0.04);
+    border-color: var(--border);
+  }}
+
+  .mapping-key {{
+    font-size: 0.75rem;
+    font-weight: 700;
+    min-width: 36px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 6px;
+    border: 1px solid var(--border-hover);
+    background: var(--bg);
+    flex-shrink: 0;
+  }}
+
+  .mapping-action {{
+    font-size: 0.82rem;
+    color: var(--text-muted);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }}
+
+  /* Standalone rules */
+  .standalone-grid {{
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+    gap: 12px;
+    margin-top: 20px;
+  }}
+
+  .standalone-card {{
+    position: relative;
+    border-radius: 12px;
+    border: 1px solid var(--border);
+    background: var(--bg-card);
+    padding: 16px 20px;
+    transition: all 0.25s;
+    overflow: hidden;
+  }}
+
+  .standalone-card:hover {{
+    border-color: var(--border-hover);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+  }}
+
+  .standalone-card h3 {{
+    font-size: 0.9rem;
+    font-weight: 600;
+    margin-bottom: 10px;
+  }}
+
+  .standalone-entry {{
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 0;
+    font-size: 0.82rem;
+  }}
+
+  .standalone-entry .arrow {{
+    color: var(--text-muted);
+    font-size: 0.7rem;
+  }}
+
+  .badge {{
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 9999px;
+    font-size: 0.65rem;
+    font-weight: 500;
+    background: rgba(158, 122, 255, 0.1);
+    color: var(--accent-from);
+    border: 1px solid rgba(158, 122, 255, 0.2);
+    margin-left: auto;
+    flex-shrink: 0;
+  }}
+
+  /* Layer panel wrapper */
+  .layer-panel {{
+    display: none;
+  }}
+
+  .layer-panel.visible {{
+    display: block;
+    animation: fade-in 0.25s ease;
+  }}
+
+  @keyframes fade-in {{
+    from {{ opacity: 0; transform: translateY(8px); }}
+    to {{ opacity: 1; transform: translateY(0); }}
+  }}
+
+  /* Responsive */
+  @media (max-width: 640px) {{
+    .header h1 {{ font-size: 2rem; }}
+    .kb-key {{ min-width: 28px; height: 36px; font-size: 0.6rem; }}
+    .kb-key.spacebar {{ min-width: 160px; }}
+    .mapping-grid {{ grid-template-columns: 1fr; }}
+    .standalone-grid {{ grid-template-columns: 1fr; }}
+  }}
+
+  /* Shimmer text for hyper key label */
+  .shimmer {{
+    background: linear-gradient(
+      110deg,
+      var(--text-muted) 35%,
+      rgba(255,255,255,0.8) 50%,
+      var(--text-muted) 65%
+    );
+    background-size: 200% 100%;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    animation: shimmer 2.5s linear infinite;
+  }}
+
+  @keyframes shimmer {{
+    from {{ background-position: 200% center; }}
+    to {{ background-position: -200% center; }}
+  }}
+
+  .hyper-badge {{
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 14px;
+    border-radius: 9999px;
+    border: 1px solid rgba(158,122,255,0.3);
+    background: rgba(158,122,255,0.05);
+    font-size: 0.8rem;
+    color: var(--accent-from);
+    margin-bottom: 24px;
+  }}
+
+  .stats {{
+    display: flex;
+    gap: 24px;
+    justify-content: center;
+    margin-bottom: 32px;
+    flex-wrap: wrap;
+  }}
+
+  .stat {{
+    text-align: center;
+  }}
+
+  .stat-value {{
+    font-size: 1.5rem;
+    font-weight: 700;
+    background: linear-gradient(135deg, var(--accent-from), var(--accent-to));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }}
+
+  .stat-label {{
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    margin-top: 2px;
+  }}
+  /* ── Practice Mode ── */
+  .practice-toggle-wrap {{
+    display: flex;
+    justify-content: center;
+    margin-bottom: 28px;
+    gap: 12px;
+    align-items: center;
+  }}
+
+  .practice-btn {{
+    padding: 8px 20px;
+    border-radius: 9999px;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--text-muted);
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.25s ease;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }}
+
+  .practice-btn:hover {{ border-color: var(--border-hover); color: var(--text); }}
+
+  .practice-btn.on {{
+    background: linear-gradient(135deg, var(--accent-from), var(--accent-to));
+    border-color: transparent;
+    color: #fff;
+    box-shadow: 0 0 24px rgba(158,122,255,0.25);
+  }}
+
+  .practice-btn .rec-dot {{
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--text-muted);
+    transition: background 0.2s;
+  }}
+
+  .practice-btn.on .rec-dot {{
+    background: #ff4444;
+    animation: rec-blink 1s ease-in-out infinite;
+  }}
+
+  @keyframes rec-blink {{
+    0%, 100% {{ opacity: 1; }}
+    50% {{ opacity: 0.3; }}
+  }}
+
+  /* HUD bar */
+  .practice-hud {{
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 200;
+    background: rgba(10,10,15,0.92);
+    backdrop-filter: blur(16px);
+    border-top: 1px solid var(--border);
+    padding: 0 24px;
+    transform: translateY(100%);
+    transition: transform 0.3s ease;
+    display: flex;
+    align-items: stretch;
+    min-height: 72px;
+  }}
+
+  .practice-hud.visible {{
+    transform: translateY(0);
+  }}
+
+  .hud-chain {{
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex: 1;
+    padding: 14px 0;
+    min-width: 0;
+  }}
+
+  .hud-step {{
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 14px;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    background: var(--bg-card);
+    font-size: 0.82rem;
+    white-space: nowrap;
+    transition: all 0.25s ease;
+    opacity: 0.4;
+  }}
+
+  .hud-step.reached {{
+    opacity: 1;
+    border-color: var(--border-hover);
+  }}
+
+  .hud-step.active {{
+    opacity: 1;
+    border-color: var(--accent-from);
+    box-shadow: 0 0 16px rgba(158,122,255,0.2);
+    background: rgba(158,122,255,0.08);
+  }}
+
+  .hud-step.fired {{
+    opacity: 1;
+    border-color: #10b981;
+    background: rgba(16,185,129,0.08);
+    box-shadow: 0 0 16px rgba(16,185,129,0.2);
+  }}
+
+  .hud-step .step-icon {{
+    font-size: 1.1rem;
+    flex-shrink: 0;
+  }}
+
+  .hud-step .step-label {{
+    color: var(--text-muted);
+    font-size: 0.7rem;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }}
+
+  .hud-step .step-value {{
+    font-weight: 700;
+    color: var(--text);
+  }}
+
+  .hud-arrow {{
+    color: var(--text-muted);
+    font-size: 0.7rem;
+    opacity: 0.4;
+    transition: opacity 0.2s;
+    flex-shrink: 0;
+  }}
+
+  .hud-arrow.reached {{ opacity: 0.8; }}
+
+  .hud-result {{
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: flex-end;
+    padding: 14px 0 14px 20px;
+    border-left: 1px solid var(--border);
+    margin-left: auto;
+    min-width: 200px;
+    max-width: 350px;
+  }}
+
+  .hud-result-action {{
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: var(--text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+    text-align: right;
+  }}
+
+  .hud-result-hint {{
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    margin-top: 2px;
+  }}
+
+  /* Pressed key visual feedback */
+  .kb-key.pressed {{
+    transform: translateY(2px) !important;
+    box-shadow: 0 0 20px rgba(158,122,255,0.5) !important;
+    border-color: var(--accent-from) !important;
+    z-index: 10;
+    transition: all 0.08s ease !important;
+  }}
+
+  .kb-key.pressed::after {{
+    content: '' !important;
+    position: absolute !important;
+    inset: -2px !important;
+    border-radius: inherit !important;
+    padding: 2px !important;
+    background: linear-gradient(135deg, var(--accent-from), var(--accent-to)) !important;
+    -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0) !important;
+    -webkit-mask-composite: xor !important;
+    mask-composite: exclude !important;
+    animation: none !important;
+    opacity: 1 !important;
+  }}
+
+  .kb-key.result-flash {{
+    animation: result-flash 0.6s ease;
+  }}
+
+  @keyframes result-flash {{
+    0% {{ box-shadow: 0 0 0px rgba(16,185,129,0); }}
+    30% {{ box-shadow: 0 0 30px rgba(16,185,129,0.6); }}
+    100% {{ box-shadow: 0 0 0px rgba(16,185,129,0); }}
+  }}
+
+  /* Practice mode hint banner */
+  .practice-hint {{
+    text-align: center;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    margin-bottom: 16px;
+    display: none;
+  }}
+
+  .practice-hint.visible {{
+    display: block;
+    animation: fade-in 0.3s ease;
+  }}
+
+  .practice-hint kbd {{
+    display: inline-block;
+    padding: 2px 7px;
+    border-radius: 4px;
+    border: 1px solid var(--border-hover);
+    background: var(--bg-card);
+    font-family: inherit;
+    font-size: 0.75rem;
+    margin: 0 2px;
+  }}
+
+  /* History log */
+  .history-log {{
+    position: fixed;
+    bottom: 80px;
+    right: 20px;
+    z-index: 190;
+    display: flex;
+    flex-direction: column-reverse;
+    gap: 4px;
+    max-height: 200px;
+    overflow: hidden;
+    pointer-events: none;
+  }}
+
+  .history-entry {{
+    padding: 6px 12px;
+    border-radius: 8px;
+    background: rgba(10,10,15,0.85);
+    backdrop-filter: blur(8px);
+    border: 1px solid var(--border);
+    font-size: 0.75rem;
+    color: var(--text);
+    white-space: nowrap;
+    animation: history-in 0.3s ease;
+    opacity: 0.9;
+  }}
+
+  .history-entry.fading {{
+    opacity: 0;
+    transition: opacity 0.5s ease;
+  }}
+
+  @keyframes history-in {{
+    from {{ opacity: 0; transform: translateX(20px); }}
+    to {{ opacity: 0.9; transform: translateX(0); }}
+  }}
+
+  .history-entry .he-keys {{
+    color: var(--accent-from);
+    font-weight: 600;
+  }}
+
+  .history-entry .he-arrow {{
+    color: var(--text-muted);
+    margin: 0 6px;
+  }}
+
+  .history-entry .he-action {{
+    color: #10b981;
+  }}
+
+  /* Live keystroke monitor */
+  .keystroke-monitor {{
+    position: fixed;
+    top: 16px;
+    right: 16px;
+    z-index: 200;
+    background: rgba(10,10,15,0.92);
+    backdrop-filter: blur(16px);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 12px 16px;
+    min-width: 220px;
+    display: none;
+    font-size: 0.78rem;
+  }}
+
+  .keystroke-monitor.visible {{
+    display: block;
+    animation: fade-in 0.2s ease;
+  }}
+
+  .km-title {{
+    font-size: 0.65rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-muted);
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }}
+
+  .km-title .km-live {{
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #10b981;
+    animation: rec-blink 1s ease-in-out infinite;
+  }}
+
+  .km-row {{
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 3px 0;
+  }}
+
+  .km-label {{
+    color: var(--text-muted);
+    min-width: 50px;
+  }}
+
+  .km-value {{
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    font-weight: 600;
+    color: var(--text);
+  }}
+
+  .km-mods {{
+    display: flex;
+    gap: 4px;
+    margin-top: 6px;
+    flex-wrap: wrap;
+  }}
+
+  .km-mod {{
+    padding: 2px 8px;
+    border-radius: 4px;
+    border: 1px solid var(--border);
+    background: var(--bg-card);
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    transition: all 0.1s;
+  }}
+
+  .km-mod.held {{
+    border-color: var(--accent-from);
+    color: var(--accent-from);
+    background: rgba(158,122,255,0.1);
+    box-shadow: 0 0 8px rgba(158,122,255,0.2);
+  }}
+
+  .km-last {{
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px solid var(--border);
+    color: var(--text-muted);
+    font-size: 0.72rem;
+    max-height: 80px;
+    overflow-y: auto;
+  }}
+
+  .km-last-entry {{
+    padding: 2px 0;
+    display: flex;
+    gap: 6px;
+  }}
+
+  .km-last-entry .km-code {{
+    color: var(--accent-from);
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    font-weight: 600;
+  }}
+
+  .km-last-entry .km-mapped {{
+    color: #10b981;
+  }}
+
+  .km-last-entry .km-unmapped {{
+    color: #ef4444;
+  }}
+</style>
+</head>
+<body>
+
+<div class="grid-bg"></div>
+<div class="tooltip" id="tooltip"></div>
+
+<div class="container">
+  <div class="header">
+    <div style="display:flex;justify-content:center;margin-bottom:12px;">
+      <span class="hyper-badge">
+        <span style="width:6px;height:6px;border-radius:50%;background:var(--accent-from);"></span>
+        <span class="shimmer">Caps Lock = Hyper Key (\u2303\u2325\u21e7\u2318)</span>
+      </span>
+    </div>
+    <h1>PoweredX</h1>
+    <p>Karabiner-Elements Configuration Visualizer</p>
+  </div>
+
+  <div class="stats" id="stats"></div>
+
+  <div class="practice-toggle-wrap">
+    <button class="practice-btn" id="practiceBtn" title="Toggle Practice Mode">
+      <span class="rec-dot"></span>
+      <span>Practice Mode</span>
+    </button>
+  </div>
+
+  <div class="practice-hint" id="practiceHint">
+    Use <kbd>`</kbd> (backtick) as Hyper key, or hold all 4 modifiers, or just click keys on the keyboard.
+    Press <kbd>Esc</kbd> to reset.
+  </div>
+
+  <div class="search-wrap">
+    <div style="position:relative;">
+      <span class="icon">&#128269;</span>
+      <input class="search-input" id="search" placeholder="Search keys, apps, actions..." autocomplete="off">
+    </div>
+  </div>
+
+  <div class="tabs" id="tabs"></div>
+
+  <div id="panels"></div>
+</div>
+
+<!-- Practice HUD -->
+<div class="practice-hud" id="practiceHud">
+  <div class="hud-chain">
+    <div class="hud-step" id="hudHyper">
+      <span class="step-icon">\u2328</span>
+      <div>
+        <div class="step-label">Step 1</div>
+        <div class="step-value">Hyper</div>
+      </div>
+    </div>
+    <span class="hud-arrow" id="hudArrow1">\u25b6</span>
+    <div class="hud-step" id="hudSublayer">
+      <span class="step-icon">\u2387</span>
+      <div>
+        <div class="step-label">Step 2</div>
+        <div class="step-value" id="hudSublayerVal">Sublayer</div>
+      </div>
+    </div>
+    <span class="hud-arrow" id="hudArrow2">\u25b6</span>
+    <div class="hud-step" id="hudAction">
+      <span class="step-icon">\u26a1</span>
+      <div>
+        <div class="step-label">Step 3</div>
+        <div class="step-value" id="hudActionVal">Action Key</div>
+      </div>
+    </div>
+  </div>
+  <div class="hud-result" id="hudResult">
+    <div class="hud-result-action" id="hudResultAction">Press Hyper to begin...</div>
+    <div class="hud-result-hint" id="hudResultHint">Hold Caps Lock or all four modifiers</div>
+  </div>
+</div>
+
+<!-- History log -->
+<div class="history-log" id="historyLog"></div>
+
+<!-- Live keystroke monitor -->
+<div class="keystroke-monitor" id="keystrokeMonitor">
+  <div class="km-title"><span class="km-live"></span> Live Keystrokes</div>
+  <div class="km-row">
+    <span class="km-label">Key:</span>
+    <span class="km-value" id="kmKey">-</span>
+  </div>
+  <div class="km-row">
+    <span class="km-label">Code:</span>
+    <span class="km-value" id="kmCode">-</span>
+  </div>
+  <div class="km-row">
+    <span class="km-label">Mapped:</span>
+    <span class="km-value" id="kmMapped">-</span>
+  </div>
+  <div class="km-mods">
+    <span class="km-mod" id="kmCtrl">\u2303 Ctrl</span>
+    <span class="km-mod" id="kmAlt">\u2325 Opt</span>
+    <span class="km-mod" id="kmShift">\u21e7 Shift</span>
+    <span class="km-mod" id="kmMeta">\u2318 Cmd</span>
+  </div>
+  <div class="km-last" id="kmLast"></div>
+</div>
+
+<script>
+const SUBLAYERS = {sublayers_json};
+const STANDALONE = {standalone_json};
+const KEYBOARD = {keyboard_json};
+const KEY_LABELS = {key_labels_json};
+const LAYER_COLORS = {layer_colors_json};
+
+function friendlyKey(k) {{
+  if (KEY_LABELS[k]) return KEY_LABELS[k];
+  return k.length === 1 ? k.toUpperCase() : k;
+}}
+
+// Category colors for action prefixes
+const CAT_COLORS = {{
+  'App':     '#8b5cf6',
+  'URL':     '#3b82f6',
+  'Raycast': '#f97316',
+  'Window':  '#f59e0b',
+  'Shell':   '#10b981',
+  'Key':     '#ec4899',
+}};
+
+function splitAction(action) {{
+  // Returns {{ cat: 'App', value: 'Slack', color: '#8b5cf6' }} or {{ cat: null, value: action, color: null }}
+  const match = action.match(/^(App|URL|Raycast|Window|Shell|Key):\\s*(.+)$/);
+  if (match) {{
+    return {{ cat: match[1], value: match[2], color: CAT_COLORS[match[1]] || null }};
+  }}
+  return {{ cat: null, value: action, color: null }};
+}}
+
+// Build stats
+const statsEl = document.getElementById('stats');
+const totalMappings = Object.values(SUBLAYERS).reduce((s, m) => s + Object.keys(m).length, 0);
+statsEl.innerHTML = `
+  <div class="stat"><div class="stat-value">${{Object.keys(SUBLAYERS).length}}</div><div class="stat-label">Sublayers</div></div>
+  <div class="stat"><div class="stat-value">${{totalMappings}}</div><div class="stat-label">Key Mappings</div></div>
+  <div class="stat"><div class="stat-value">${{STANDALONE.length}}</div><div class="stat-label">Standalone Rules</div></div>
+`;
+
+// Build tabs
+const tabsEl = document.getElementById('tabs');
+const panelsEl = document.getElementById('panels');
+const allTabs = [...Object.keys(SUBLAYERS).map(k => ({{ id: k, label: (LAYER_COLORS[k]?.label || k) + ' [' + friendlyKey(k) + ']' }})), {{ id: '_standalone', label: 'Standalone Rules' }}];
+
+allTabs.forEach((t, i) => {{
+  const btn = document.createElement('button');
+  btn.className = 'tab' + (i === 0 ? ' active' : '');
+  btn.dataset.tab = t.id;
+  const colors = LAYER_COLORS[t.id] || {{ from: '#9E7AFF', to: '#FE8BBB' }};
+  btn.innerHTML = `<span class="label">${{t.label}}</span>`;
+  if (i === 0 || t.id !== '_standalone') {{
+    btn.style.setProperty('--tab-from', colors.from);
+    btn.style.setProperty('--tab-to', colors.to);
+  }}
+  btn.addEventListener('click', () => switchTab(t.id));
+  tabsEl.appendChild(btn);
+}});
+
+function switchTab(id) {{
+  document.querySelectorAll('.tab').forEach(t => {{
+    t.classList.toggle('active', t.dataset.tab === id);
+    if (t.dataset.tab === id) {{
+      const from = t.style.getPropertyValue('--tab-from') || '#9E7AFF';
+      const to = t.style.getPropertyValue('--tab-to') || '#FE8BBB';
+      t.style.background = `linear-gradient(135deg, ${{from}}, ${{to}})`;
+      t.style.borderColor = 'transparent';
+    }} else {{
+      t.style.background = '';
+      t.style.borderColor = '';
+    }}
+  }});
+  document.querySelectorAll('.layer-panel').forEach(p => p.classList.toggle('visible', p.dataset.panel === id));
+}}
+
+// Build sublayer panels
+Object.entries(SUBLAYERS).forEach(([key, mappings]) => {{
+  const colors = LAYER_COLORS[key] || {{ from: '#9E7AFF', to: '#FE8BBB', label: key }};
+  const panel = document.createElement('div');
+  panel.className = 'layer-panel' + (key === Object.keys(SUBLAYERS)[0] ? ' visible' : '');
+  panel.dataset.panel = key;
+
+  // Collect categories used in this layer for legend
+  const layerCats = new Set();
+  Object.values(mappings).forEach(a => {{
+    const s = splitAction(a);
+    if (s.cat) layerCats.add(s.cat);
+  }});
+
+  // Legend
+  let kbHtml = '<div class="kb-legend">';
+  layerCats.forEach(cat => {{
+    kbHtml += `<div class="legend-item"><span class="legend-dot" style="background:${{CAT_COLORS[cat]}}"></span>${{cat}}</div>`;
+  }});
+  kbHtml += '</div>';
+
+  // Keyboard
+  kbHtml += '<div class="keyboard">';
+  KEYBOARD.forEach(row => {{
+    kbHtml += '<div class="kb-row">';
+    row.forEach(kc => {{
+      const isActive = mappings.hasOwnProperty(kc);
+      const isTrigger = kc === key;
+      const label = friendlyKey(kc);
+      const action = mappings[kc] || '';
+      const parsed = splitAction(action);
+      const displayVal = parsed.value;
+      const shortVal = displayVal.length > 12 ? displayVal.slice(0, 12) + '\u2026' : displayVal;
+      let cls = 'kb-key';
+      if (kc === 'spacebar') cls += ' spacebar';
+      if (isTrigger) cls += ' trigger-key';
+      else if (isActive) cls += ' active';
+
+      const catDot = (isActive && parsed.color)
+        ? `<span class="cat-dot" style="background:${{parsed.color}}"></span>`
+        : '';
+
+      kbHtml += `<div class="${{cls}}" data-key="${{kc}}" data-action="${{action.replace(/"/g, '&quot;')}}"
+        style="--key-from:${{colors.from}};--key-to:${{colors.to}};${{isActive ? 'background:linear-gradient(135deg,' + colors.from + '22,' + colors.to + '22)' : ''}}">
+        ${{catDot}}
+        <span class="key-label">${{label}}</span>
+        ${{isActive ? `<span class="key-action">${{shortVal}}</span>` : ''}}
+        ${{isTrigger ? `<span class="key-action" style="color:var(--accent-from);font-weight:600">TRIGGER</span>` : ''}}
+      </div>`;
+    }});
+    kbHtml += '</div>';
+  }});
+  kbHtml += '</div>';
+
+  // Mapping list
+  let listHtml = `<div class="section-title"><span class="dot" style="background:${{colors.from}}"></span> ${{colors.label}} Layer Mappings</div><div class="mapping-grid">`;
+  Object.entries(mappings).forEach(([mk, mv]) => {{
+    listHtml += `<div class="mapping-item" data-search="${{mk}} ${{mv.toLowerCase()}}">
+      <span class="mapping-key" style="color:${{colors.from}};border-color:${{colors.from}}33">${{friendlyKey(mk)}}</span>
+      <span class="mapping-action">${{mv}}</span>
+    </div>`;
+  }});
+  listHtml += '</div>';
+
+  panel.innerHTML = kbHtml + '<div class="magic-card"><div class="spotlight"></div><div class="card-content">' + listHtml + '</div></div>';
+  panelsEl.appendChild(panel);
+}});
+
+// Standalone panel
+const standalonePanel = document.createElement('div');
+standalonePanel.className = 'layer-panel';
+standalonePanel.dataset.panel = '_standalone';
+let stHtml = '<div class="section-title"><span class="dot"></span> Standalone Rules</div><div class="standalone-grid">';
+STANDALONE.forEach(rule => {{
+  stHtml += `<div class="standalone-card" data-search="${{rule.description.toLowerCase()}} ${{rule.entries.map(e => e.trigger + ' ' + e.action + ' ' + e.scope).join(' ').toLowerCase()}}">
+    <h3>${{rule.description}}</h3>`;
+  rule.entries.forEach(e => {{
+    stHtml += `<div class="standalone-entry">
+      <span class="mapping-key">${{e.trigger}}</span>
+      <span class="arrow">\u2192</span>
+      <span>${{e.action}}</span>
+      <span class="badge">${{e.scope}}</span>
+    </div>`;
+  }});
+  stHtml += '</div>';
+}});
+stHtml += '</div>';
+standalonePanel.innerHTML = stHtml;
+panelsEl.appendChild(standalonePanel);
+
+// Tooltip
+const tooltip = document.getElementById('tooltip');
+document.addEventListener('mouseover', e => {{
+  const key = e.target.closest('.kb-key');
+  if (key && key.dataset.action) {{
+    tooltip.textContent = key.dataset.action;
+    tooltip.classList.add('visible');
+  }} else {{
+    tooltip.classList.remove('visible');
+  }}
+}});
+document.addEventListener('mousemove', e => {{
+  tooltip.style.left = e.clientX + 12 + 'px';
+  tooltip.style.top = e.clientY - 10 + 'px';
+}});
+
+// Spotlight effect on magic cards
+document.querySelectorAll('.magic-card').forEach(card => {{
+  card.addEventListener('mousemove', e => {{
+    const rect = card.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    card.querySelector('.spotlight').style.background = `radial-gradient(400px circle at ${{x}}px ${{y}}px, rgba(158,122,255,0.06), transparent 60%)`;
+  }});
+}});
+
+// Search
+document.getElementById('search').addEventListener('input', e => {{
+  const q = e.target.value.toLowerCase().trim();
+  document.querySelectorAll('.mapping-item, .standalone-card').forEach(el => {{
+    const text = el.dataset.search || el.textContent.toLowerCase();
+    el.style.display = (!q || text.includes(q)) ? '' : 'none';
+  }});
+  // Also highlight matching keys
+  document.querySelectorAll('.kb-key').forEach(key => {{
+    const action = (key.dataset.action || '').toLowerCase();
+    const kc = (key.dataset.key || '').toLowerCase();
+    if (q && (action.includes(q) || kc.includes(q))) {{
+      key.style.boxShadow = '0 0 12px rgba(254,139,187,0.5)';
+    }} else {{
+      key.style.boxShadow = '';
+    }}
+  }});
+}});
+
+// Init first tab
+switchTab(Object.keys(SUBLAYERS)[0]);
+
+// ── Practice Mode ──
+const practiceBtn = document.getElementById('practiceBtn');
+const practiceHint = document.getElementById('practiceHint');
+const practiceHud = document.getElementById('practiceHud');
+const hudHyper = document.getElementById('hudHyper');
+const hudSublayer = document.getElementById('hudSublayer');
+const hudSublayerVal = document.getElementById('hudSublayerVal');
+const hudAction = document.getElementById('hudAction');
+const hudActionVal = document.getElementById('hudActionVal');
+const hudArrow1 = document.getElementById('hudArrow1');
+const hudArrow2 = document.getElementById('hudArrow2');
+const hudResultAction = document.getElementById('hudResultAction');
+const hudResultHint = document.getElementById('hudResultHint');
+const historyLog = document.getElementById('historyLog');
+const keystrokeMonitor = document.getElementById('keystrokeMonitor');
+const kmKey = document.getElementById('kmKey');
+const kmCode = document.getElementById('kmCode');
+const kmMapped = document.getElementById('kmMapped');
+const kmCtrl = document.getElementById('kmCtrl');
+const kmAlt = document.getElementById('kmAlt');
+const kmShift = document.getElementById('kmShift');
+const kmMeta = document.getElementById('kmMeta');
+const kmLast = document.getElementById('kmLast');
+
+let practiceOn = false;
+// State machine: 'idle' -> 'hyper' -> 'sublayer' -> 'fired'
+let pState = 'idle';
+let pCurrentLayer = null;
+let hyperHeld = false;
+
+// JS key code -> karabiner key code mapping
+const JS_TO_KB = {{}};
+'abcdefghijklmnopqrstuvwxyz'.split('').forEach(c => JS_TO_KB['Key' + c.toUpperCase()] = c);
+'0123456789'.split('').forEach(c => JS_TO_KB['Digit' + c] = c);
+JS_TO_KB['Semicolon'] = 'semicolon';
+JS_TO_KB['Quote'] = 'quote';
+JS_TO_KB['Comma'] = 'comma';
+JS_TO_KB['Period'] = 'period';
+JS_TO_KB['Slash'] = 'slash';
+JS_TO_KB['BracketLeft'] = 'open_bracket';
+JS_TO_KB['BracketRight'] = 'close_bracket';
+JS_TO_KB['Backslash'] = 'backslash';
+JS_TO_KB['Minus'] = 'hyphen';
+JS_TO_KB['Equal'] = 'equal_sign';
+JS_TO_KB['Backquote'] = 'grave_accent_and_tilde';
+JS_TO_KB['Space'] = 'spacebar';
+JS_TO_KB['CapsLock'] = 'caps_lock';
+
+function togglePractice() {{
+  practiceOn = !practiceOn;
+  practiceBtn.classList.toggle('on', practiceOn);
+  practiceHint.classList.toggle('visible', practiceOn);
+  practiceHud.classList.toggle('visible', practiceOn);
+  keystrokeMonitor.classList.toggle('visible', practiceOn);
+  if (!practiceOn) {{
+    resetPractice();
+    clearAllPressed();
+  }}
+}}
+
+practiceBtn.addEventListener('click', togglePractice);
+
+function resetPractice() {{
+  pState = 'idle';
+  pCurrentLayer = null;
+  hyperHeld = false;
+  hudHyper.className = 'hud-step';
+  hudSublayer.className = 'hud-step';
+  hudAction.className = 'hud-step';
+  hudArrow1.className = 'hud-arrow';
+  hudArrow2.className = 'hud-arrow';
+  hudSublayerVal.textContent = 'Sublayer';
+  hudActionVal.textContent = 'Action Key';
+  hudResultAction.textContent = 'Press ` (backtick) as Hyper...';
+  hudResultAction.style.color = '';
+  hudResultHint.textContent = 'Or hold all 4 modifiers, or click keys';
+  clearAllPressed();
+}}
+
+function clearAllPressed() {{
+  document.querySelectorAll('.kb-key.pressed, .kb-key.result-flash').forEach(k => {{
+    k.classList.remove('pressed', 'result-flash');
+  }});
+}}
+
+function setKeyPressed(kbCode, on) {{
+  // Press across ALL panels so the visible one always shows it
+  document.querySelectorAll(`.kb-key[data-key="${{kbCode}}"]`).forEach(el => {{
+    if (on) el.classList.add('pressed');
+    else el.classList.remove('pressed');
+  }});
+}}
+
+function flashKey(kbCode) {{
+  document.querySelectorAll(`.kb-key[data-key="${{kbCode}}"]`).forEach(el => {{
+    el.classList.add('result-flash');
+    setTimeout(() => el.classList.remove('result-flash'), 600);
+  }});
+}}
+
+function addHistory(keys, action) {{
+  const entry = document.createElement('div');
+  entry.className = 'history-entry';
+  entry.innerHTML = `<span class="he-keys">${{keys}}</span><span class="he-arrow">\u2192</span><span class="he-action">${{action}}</span>`;
+  historyLog.prepend(entry);
+  while (historyLog.children.length > 6) {{
+    const last = historyLog.lastChild;
+    last.classList.add('fading');
+    setTimeout(() => last.remove(), 500);
+  }}
+  setTimeout(() => {{
+    entry.classList.add('fading');
+    setTimeout(() => entry.remove(), 500);
+  }}, 5000);
+}}
+
+function isHyperCombo(e) {{
+  return e.ctrlKey && e.altKey && e.shiftKey && e.metaKey;
+}}
+
+// ── Keystroke Monitor ──
+function updateMonitor(e, kbCode) {{
+  kmKey.textContent = e.key || '-';
+  kmCode.textContent = e.code || '-';
+  kmMapped.textContent = kbCode || '(none)';
+  kmMapped.style.color = kbCode ? '#10b981' : '#ef4444';
+  kmCtrl.classList.toggle('held', e.ctrlKey);
+  kmAlt.classList.toggle('held', e.altKey);
+  kmShift.classList.toggle('held', e.shiftKey);
+  kmMeta.classList.toggle('held', e.metaKey);
+
+  // Add to recent list
+  const row = document.createElement('div');
+  row.className = 'km-last-entry';
+  const mapped = kbCode
+    ? `<span class="km-mapped">\u2192 ${{kbCode}}</span>`
+    : `<span class="km-unmapped">\u2192 unmapped</span>`;
+  const mods = [e.ctrlKey && '\u2303', e.altKey && '\u2325', e.shiftKey && '\u21e7', e.metaKey && '\u2318'].filter(Boolean).join('');
+  row.innerHTML = `<span class="km-code">${{mods}}${{e.code}}</span>${{mapped}}`;
+  kmLast.prepend(row);
+  while (kmLast.children.length > 5) kmLast.lastChild.remove();
+}}
+
+function updateModMonitor(e) {{
+  kmCtrl.classList.toggle('held', e.ctrlKey);
+  kmAlt.classList.toggle('held', e.altKey);
+  kmShift.classList.toggle('held', e.shiftKey);
+  kmMeta.classList.toggle('held', e.metaKey);
+}}
+
+// ── State machine transitions ──
+function activateHyper() {{
+  if (pState === 'fired') clearAllPressed();
+  pState = 'hyper';
+  hyperHeld = true;
+  hudHyper.className = 'hud-step active';
+  hudSublayer.className = 'hud-step';
+  hudAction.className = 'hud-step';
+  hudArrow1.className = 'hud-arrow reached';
+  hudArrow2.className = 'hud-arrow';
+  hudSublayerVal.textContent = 'Sublayer';
+  hudActionVal.textContent = 'Action Key';
+  hudResultAction.textContent = 'HYPER active! Press sublayer key...';
+  hudResultAction.style.color = '#9E7AFF';
+  hudResultHint.textContent = Object.keys(SUBLAYERS).map(k => friendlyKey(k)).join(', ');
+}}
+
+function activateSublayer(kbCode) {{
+  pState = 'sublayer';
+  pCurrentLayer = kbCode;
+  const colors = LAYER_COLORS[kbCode] || {{ label: kbCode }};
+  switchTab(kbCode);
+  setTimeout(() => setKeyPressed(kbCode, true), 30);
+  hudHyper.className = 'hud-step reached';
+  hudSublayer.className = 'hud-step active';
+  hudArrow1.className = 'hud-arrow reached';
+  hudArrow2.className = 'hud-arrow reached';
+  hudSublayerVal.textContent = `${{colors.label || kbCode.toUpperCase()}} [${{friendlyKey(kbCode)}}]`;
+  hudResultAction.textContent = `${{colors.label || kbCode.toUpperCase()}} layer. Press action key...`;
+  hudResultAction.style.color = '';
+  hudResultHint.textContent = Object.keys(SUBLAYERS[kbCode]).map(k => friendlyKey(k)).join(', ');
+}}
+
+function fireAction(kbCode) {{
+  const mappings = SUBLAYERS[pCurrentLayer];
+  const action = mappings[kbCode];
+  pState = 'fired';
+  setTimeout(() => {{
+    setKeyPressed(kbCode, true);
+    flashKey(kbCode);
+  }}, 30);
+  hudAction.className = 'hud-step fired';
+  hudSublayer.className = 'hud-step reached';
+  hudArrow2.className = 'hud-arrow reached';
+  hudActionVal.textContent = friendlyKey(kbCode);
+  hudResultAction.textContent = action;
+  hudResultAction.style.color = '#10b981';
+  hudResultHint.textContent = 'Press ` for another combo, Esc to reset';
+  addHistory(`Hyper + ${{friendlyKey(pCurrentLayer)}} + ${{friendlyKey(kbCode)}}`, action);
+  setTimeout(() => {{ hudResultAction.style.color = ''; }}, 2000);
+}}
+
+function showError(msg) {{
+  hudResultAction.textContent = msg;
+  hudResultAction.style.color = '#ef4444';
+  setTimeout(() => {{ hudResultAction.style.color = ''; }}, 1200);
+}}
+
+// ── Key event handlers ──
+document.addEventListener('keydown', e => {{
+  if (!practiceOn) return;
+  if (document.activeElement === document.getElementById('search')) return;
+
+  const kbCode = JS_TO_KB[e.code];
+  updateMonitor(e, kbCode);
+
+  // Escape always resets
+  if (e.code === 'Escape') {{
+    resetPractice();
+    e.preventDefault();
+    return;
+  }}
+
+  // Backtick (`) as Hyper trigger
+  const isBacktick = e.code === 'Backquote';
+  // CapsLock as Hyper
+  const isCapsLock = e.code === 'CapsLock';
+  // All 4 modifiers held (real Karabiner hyper) with any key
+  const isRealHyper = isHyperCombo(e);
+
+  // ── Hyper activation ──
+  if (isBacktick || isCapsLock || (isRealHyper && !kbCode)) {{
+    e.preventDefault();
+    if (pState === 'idle' || pState === 'fired') {{
+      activateHyper();
+    }}
+    return;
+  }}
+
+  // If real Hyper combo + a key, treat it as Hyper+key
+  if (isRealHyper && kbCode) {{
+    e.preventDefault();
+    if (pState === 'idle' || pState === 'fired') activateHyper();
+    // Then immediately process the key as sublayer/action
+    if (pState === 'hyper') {{
+      if (SUBLAYERS[kbCode]) {{
+        activateSublayer(kbCode);
+      }} else {{
+        showError(`"${{friendlyKey(kbCode)}}" is not a sublayer key`);
+      }}
+      return;
+    }}
+  }}
+
+  if (!kbCode) return;
+  e.preventDefault();
+
+  // ── Sublayer selection ──
+  if (pState === 'hyper') {{
+    if (SUBLAYERS[kbCode]) {{
+      activateSublayer(kbCode);
+    }} else {{
+      showError(`"${{friendlyKey(kbCode)}}" is not a sublayer key`);
+    }}
+    return;
+  }}
+
+  // ── Action key ──
+  if (pState === 'sublayer' && pCurrentLayer && SUBLAYERS[pCurrentLayer]) {{
+    const mappings = SUBLAYERS[pCurrentLayer];
+    if (mappings[kbCode]) {{
+      fireAction(kbCode);
+    }} else if (SUBLAYERS[kbCode]) {{
+      // Pressed a different sublayer key, switch
+      clearAllPressed();
+      activateSublayer(kbCode);
+    }} else {{
+      showError(`No mapping for "${{friendlyKey(kbCode)}}" in this layer`);
+      setTimeout(() => {{
+        if (pState === 'sublayer') {{
+          const colors = LAYER_COLORS[pCurrentLayer] || {{ label: pCurrentLayer }};
+          hudResultAction.textContent = `${{colors.label || pCurrentLayer}} layer. Press action key...`;
+        }}
+      }}, 1200);
+    }}
+    return;
+  }}
+}});
+
+document.addEventListener('keyup', e => {{
+  if (!practiceOn) return;
+  updateModMonitor(e);
+  // Backtick or CapsLock released
+  if (e.code === 'Backquote' || e.code === 'CapsLock') {{
+    hyperHeld = false;
+  }}
+}});
+
+// ── Click-to-simulate on keyboard keys ──
+document.addEventListener('click', e => {{
+  if (!practiceOn) return;
+  const keyEl = e.target.closest('.kb-key');
+  if (!keyEl) return;
+  const kbCode = keyEl.dataset.key;
+  if (!kbCode) return;
+
+  if (pState === 'idle' || pState === 'fired') {{
+    if (SUBLAYERS[kbCode]) {{
+      clearAllPressed();
+      hudHyper.className = 'hud-step reached';
+      activateSublayer(kbCode);
+    }}
+    return;
+  }}
+
+  if (pState === 'hyper') {{
+    if (SUBLAYERS[kbCode]) {{
+      activateSublayer(kbCode);
+    }} else {{
+      showError(`"${{friendlyKey(kbCode)}}" is not a sublayer key`);
+    }}
+    return;
+  }}
+
+  if (pState === 'sublayer' && pCurrentLayer && SUBLAYERS[pCurrentLayer]) {{
+    const mappings = SUBLAYERS[pCurrentLayer];
+    if (mappings[kbCode]) {{
+      fireAction(kbCode);
+    }} else if (SUBLAYERS[kbCode]) {{
+      clearAllPressed();
+      activateSublayer(kbCode);
+    }} else {{
+      showError(`No mapping for "${{friendlyKey(kbCode)}}"`);
+    }}
+  }}
+}});
+
+// Toggle practice mode: Ctrl/Cmd+P
+document.addEventListener('keydown', e => {{
+  if ((e.metaKey || e.ctrlKey) && e.code === 'KeyP' && !e.shiftKey && !e.altKey) {{
+    e.preventDefault();
+    togglePractice();
+  }}
+}});
+</script>
+</body>
+</html>"""
+
+
+def main():
+    rules = generate_rules()
+    sublayers = extract_sublayers(rules)
+    standalone = extract_standalone_rules(rules)
+    html = generate_html(sublayers, standalone)
+
+    out_path = os.path.join(os.path.dirname(__file__), "config_viewer.html")
+    with open(out_path, "w") as f:
+        f.write(html)
+
+    webbrowser.open(f"file://{os.path.abspath(out_path)}")
+    print(f"Opened {out_path} in browser.")
+
+
+if __name__ == "__main__":
+    main()

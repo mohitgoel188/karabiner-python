@@ -1,19 +1,3 @@
-def app(app_name: str) -> dict:
-    return {"shell_command": f"open -a '{app_name}.app'"}
-
-
-def open_url(url: str) -> dict:
-    return {"shell_command": f"open {url}"}
-
-
-def shell(cmd: str) -> dict:
-    return {"shell_command": cmd}
-
-
-def window(action: str) -> dict:
-    return {"shell_command": f"open -g rectangle://execute-action?name={action}"}
-
-
 def create_hyper_sublayers(sublayers: dict, marker: str) -> list:
     """Expand human-readable hyper mappings into Karabiner rule objects."""
     rules = []

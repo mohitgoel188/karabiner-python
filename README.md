@@ -91,7 +91,9 @@ python build.py --dry-run --verbose
 
 ## Viewing the Configuration
 
-Use the built-in viewers to display your config:
+**[Live Interactive Viewer](https://mohitgoel188.github.io/karabiner-python/viewers/config_viewer.html)** — visual keyboard layout with practice mode, search, and layer navigation.
+
+Or use the CLI viewers:
 
 ```bash
 # Rich table viewer (all layers)
@@ -100,7 +102,7 @@ python -m viewers.show_config
 # Single layer
 python -m viewers.show_config -l o
 
-# Interactive HTML viewer
+# Regenerate interactive HTML viewer
 python -m viewers.show_config_html
 ```
 

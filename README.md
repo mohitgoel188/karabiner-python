@@ -185,7 +185,28 @@ To use this with **Karabiner-Elements**, symlink or copy the file to:
 | Profile | Description |
 |----------|--------------|
 | **Default** | Always blank fallback profile |
-| **PoweredX** | Active Hyper-layer automation profile |
+| **PoweredX** | Hyper-layer automation profile (GenX) |
+| **LinX** | PoweredX/GenX + a Linux muscle-memory layer; built only with `--linx` |
+
+### `--linx` (Linux muscle-memory layer)
+
+`python build.py --linx` additionally builds/refreshes a **LinX** profile and selects it.
+LinX keeps every GenX feature (Hyper Key + sublayers, double-tap Right-Shift → Caps Lock,
+iTerm ⌘⌃T) and adds a Linux-style layer so the corner key (physical Left Ctrl) drives macOS
+shortcuts like Linux Ctrl:
+
+- **Swap Left ⌘ ↔ Left ⌃** everywhere except standalone terminals (terminals keep real Ctrl
+  for SIGINT). PyCharm is intentionally included in the swap.
+- **Volume/Brightness** via `Cmd+Ctrl+Arrows` (mirrors Linux `Ctrl+Super+Arrows`).
+- **PC-style Home/End** → line start/end (except terminals and PyCharm).
+
+To avoid double-remapping, LinX **omits** the conflicting GenX pieces — the PyCharm cmd/ctrl
+swap and Shift+Enter↔Opt+Enter (handled by the PyCharm "LinX (Mac)" keymap), the global
+⌘D↔⌃D swap, and the PoweredX `fn→cmd→ctrl→fn` `simple_modifications` rotation. LinX carries no
+`simple_modifications`.
+
+Running plain `python build.py` (no flag) re-selects **PoweredX** and leaves LinX present but
+deselected — switch between them anytime from the Karabiner-Elements menu bar.
 
 ---
 

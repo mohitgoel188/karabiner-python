@@ -24,11 +24,6 @@ _PYCHARM_BUNDLE_IDS: list[str] = [
     "^com\\.jetbrains\\.pycharm\\.ce$",
 ]
 
-# Flameshot CLI lives inside the app bundle (Homebrew cask). `gui` opens the
-# region/annotate capture. Karabiner shell_commands run with a minimal PATH, so
-# the absolute path is required.
-_FLAMESHOT_BIN = "/Applications/flameshot.app/Contents/MacOS/flameshot"
-
 
 def build_volume_brightness_rule(marker: str) -> dict:
     """Cmd+Ctrl+Arrows -> volume/brightness (mirrors Linux Ctrl+Super+Arrows).
@@ -181,31 +176,6 @@ def build_workspace_switch_rule(marker: str) -> dict:
     }
 
 
-def build_screenshot_rule(marker: str) -> dict:
-    """Ctrl+Cmd+P -> Flameshot annotate capture (`flameshot gui`).
-
-    Matches the PHYSICAL Optimus keys (left_control + left_command) ahead of the
-    Cmd<->Ctrl swap, then launches Flameshot's region/annotate capture. Requires
-    Flameshot installed and granted Screen Recording permission.
-    """
-    return {
-        "description": (
-            f"{marker} LinX: Ctrl+Cmd+P -> Flameshot annotate capture "
-            "(physical Optimus keys)"
-        ),
-        "manipulators": [
-            {
-                "type": "basic",
-                "from": {
-                    "key_code": "p",
-                    "modifiers": {"mandatory": ["left_control", "left_command"]},
-                },
-                "to": [{"shell_command": f"{_FLAMESHOT_BIN} gui"}],
-            }
-        ],
-    }
-
-
 def build_iterm_shortcuts_rule(marker: str) -> dict:
     """In iTerm2, map Linux-style Ctrl shortcuts onto their Cmd equivalents.
 
@@ -264,7 +234,6 @@ def build_linx_layer(marker: str) -> list[dict]:
     return [
         build_volume_brightness_rule(marker),
         build_workspace_switch_rule(marker),
-        build_screenshot_rule(marker),
         build_iterm_shortcuts_rule(marker),
         build_swap_cmd_ctrl_rule(marker),
         build_home_end_rule(marker),

@@ -142,15 +142,111 @@ def build_home_end_rule(marker: str) -> dict:
     }
 
 
+def build_workspace_switch_rule(marker: str) -> dict:
+    """Ctrl+Alt+Left/Right -> switch Mission Control space left/right.
+
+    Matches the PHYSICAL Optimus keys (left_control + left_option) ahead of the
+    Cmd<->Ctrl swap and emits macOS-native Control+Arrow. Requires more than one
+    desktop/space and the 'Move left/right a space' shortcuts enabled under
+    System Settings > Keyboard > Keyboard Shortcuts > Mission Control.
+    """
+    return {
+        "description": (
+            f"{marker} LinX: Ctrl+Alt+Arrow -> switch space left/right "
+            "(physical Optimus keys; Mission Control)"
+        ),
+        "manipulators": [
+            {
+                "type": "basic",
+                "from": {
+                    "key_code": "left_arrow",
+                    "modifiers": {"mandatory": ["left_control", "left_option"]},
+                },
+                "to": [{"key_code": "left_arrow", "modifiers": ["left_control"]}],
+            },
+            {
+                "type": "basic",
+                "from": {
+                    "key_code": "right_arrow",
+                    "modifiers": {"mandatory": ["left_control", "left_option"]},
+                },
+                "to": [{"key_code": "right_arrow", "modifiers": ["left_control"]}],
+            },
+        ],
+    }
+
+
+def build_screenshot_rule(marker: str) -> dict:
+    """Ctrl+Cmd+P -> region screenshot to clipboard (Cmd+Ctrl+Shift+4).
+
+    Matches the PHYSICAL Optimus keys (left_control + left_command) ahead of the
+    Cmd<->Ctrl swap. Drag-select a region; the image goes to the clipboard.
+    """
+    return {
+        "description": (
+            f"{marker} LinX: Ctrl+Cmd+P -> region screenshot to clipboard "
+            "(physical Optimus keys)"
+        ),
+        "manipulators": [
+            {
+                "type": "basic",
+                "from": {
+                    "key_code": "p",
+                    "modifiers": {"mandatory": ["left_control", "left_command"]},
+                },
+                "to": [
+                    {
+                        "key_code": "4",
+                        "modifiers": ["left_command", "left_control", "left_shift"],
+                    }
+                ],
+            }
+        ],
+    }
+
+
+def build_iterm_new_tab_rule(marker: str) -> dict:
+    """In iTerm2, Ctrl+T opens a new tab (maps to Cmd+T).
+
+    iTerm2 is excluded from the Cmd<->Ctrl swap, so its corner key stays real Ctrl;
+    this lets Linux-style Ctrl+T open a tab while native Cmd+T still works. Plain
+    Ctrl+T only (no Shift/Cmd), so Ctrl+Shift+T and the Cmd+Ctrl+T launcher are
+    left untouched.
+    """
+    return {
+        "description": f"{marker} LinX: iTerm2 Ctrl+T -> new tab (Cmd+T)",
+        "manipulators": [
+            {
+                "type": "basic",
+                "from": {
+                    "key_code": "t",
+                    "modifiers": {"mandatory": ["left_control"]},
+                },
+                "to": [{"key_code": "t", "modifiers": ["left_command"]}],
+                "conditions": [
+                    {
+                        "type": "frontmost_application_if",
+                        "bundle_identifiers": ["^com\\.googlecode\\.iterm2$"],
+                    }
+                ],
+            }
+        ],
+    }
+
+
 def build_linx_layer(marker: str) -> list[dict]:
     """Build the Linux muscle-memory layer rules in Karabiner evaluation order.
 
-    Volume/Brightness first (it must precede the Cmd/Ctrl swap); then the swap; then
-    Home/End. The iTerm Cmd+Ctrl chord is assembled ahead of the swap in
-    generate_rules(), so it is not included here.
+    The Cmd+Ctrl / Ctrl+Alt chord rules (Volume/Brightness, workspace switch,
+    screenshot, iTerm new-tab) come first — they must precede the Cmd/Ctrl swap or
+    it rewrites their modifiers — then the swap, then Home/End. The Cmd+Ctrl iTerm
+    launcher is assembled ahead of the swap in generate_rules(), so it is not here.
     """
     return [
         build_volume_brightness_rule(marker),
+        build_workspace_switch_rule(marker),
+        build_screenshot_rule(marker),
+        build_iterm_new_tab_rule(marker),
         build_swap_cmd_ctrl_rule(marker),
         build_home_end_rule(marker),
     ]

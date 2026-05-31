@@ -5,6 +5,9 @@ from src.rules.hyper import build_hyper_base, build_double_shift_caps_lock
 from src.rules.pycharm import build_pycharm_rules
 from src.rules.linx import (
     build_volume_brightness_rule,
+    build_workspace_switch_rule,
+    build_screenshot_rule,
+    build_iterm_new_tab_rule,
     build_swap_cmd_ctrl_rule,
     build_home_end_rule,
 )
@@ -55,6 +58,9 @@ def generate_rules(linx: bool = False) -> list:
     # precede the Cmd<->Ctrl swap, or the swap rewrites their modifiers first.
     return [
         build_volume_brightness_rule(MARKER),
+        build_workspace_switch_rule(MARKER),
+        build_screenshot_rule(MARKER),
+        build_iterm_new_tab_rule(MARKER),
         open_iterm_shortcut,
         build_swap_cmd_ctrl_rule(MARKER),
         build_home_end_rule(MARKER),

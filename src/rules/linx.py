@@ -205,16 +205,30 @@ def build_screenshot_rule(marker: str) -> dict:
     }
 
 
-def build_iterm_new_tab_rule(marker: str) -> dict:
-    """In iTerm2, Ctrl+T opens a new tab (maps to Cmd+T).
+def build_iterm_shortcuts_rule(marker: str) -> dict:
+    """In iTerm2, map Linux-style Ctrl shortcuts onto their Cmd equivalents.
 
-    iTerm2 is excluded from the Cmd<->Ctrl swap, so its corner key stays real Ctrl;
-    this lets Linux-style Ctrl+T open a tab while native Cmd+T still works. Plain
-    Ctrl+T only (no Shift/Cmd), so Ctrl+Shift+T and the Cmd+Ctrl+T launcher are
-    left untouched.
+    iTerm2 is intentionally excluded from the Cmd<->Ctrl swap so its corner key
+    stays real Ctrl and Ctrl+C remains SIGINT (Linux terminal behavior). These
+    targeted rules give back the conveniences without losing interrupt:
+
+    - Ctrl+T -> Cmd+T   (new tab)
+    - Ctrl+V -> Cmd+V   (paste)
+
+    Plain Ctrl+<key> only (no Shift/Cmd), so Ctrl+Shift+* and Cmd chords are
+    untouched, and Ctrl+C is left alone as interrupt.
     """
+    iterm_if = [
+        {
+            "type": "frontmost_application_if",
+            "bundle_identifiers": ["^com\\.googlecode\\.iterm2$"],
+        }
+    ]
     return {
-        "description": f"{marker} LinX: iTerm2 Ctrl+T -> new tab (Cmd+T)",
+        "description": (
+            f"{marker} LinX: iTerm2 Ctrl+T -> new tab, Ctrl+V -> paste "
+            "(corner key keeps Ctrl+C = SIGINT)"
+        ),
         "manipulators": [
             {
                 "type": "basic",
@@ -223,13 +237,17 @@ def build_iterm_new_tab_rule(marker: str) -> dict:
                     "modifiers": {"mandatory": ["left_control"]},
                 },
                 "to": [{"key_code": "t", "modifiers": ["left_command"]}],
-                "conditions": [
-                    {
-                        "type": "frontmost_application_if",
-                        "bundle_identifiers": ["^com\\.googlecode\\.iterm2$"],
-                    }
-                ],
-            }
+                "conditions": iterm_if,
+            },
+            {
+                "type": "basic",
+                "from": {
+                    "key_code": "v",
+                    "modifiers": {"mandatory": ["left_control"]},
+                },
+                "to": [{"key_code": "v", "modifiers": ["left_command"]}],
+                "conditions": iterm_if,
+            },
         ],
     }
 
@@ -246,7 +264,7 @@ def build_linx_layer(marker: str) -> list[dict]:
         build_volume_brightness_rule(marker),
         build_workspace_switch_rule(marker),
         build_screenshot_rule(marker),
-        build_iterm_new_tab_rule(marker),
+        build_iterm_shortcuts_rule(marker),
         build_swap_cmd_ctrl_rule(marker),
         build_home_end_rule(marker),
     ]

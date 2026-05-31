@@ -7,12 +7,16 @@ from src.rules.linx import (
     build_volume_brightness_rule,
     build_workspace_switch_rule,
     build_screenshot_rule,
-    build_iterm_new_tab_rule,
+    build_iterm_shortcuts_rule,
     build_swap_cmd_ctrl_rule,
     build_home_end_rule,
 )
 
 MARKER = "GenX"
+
+# The Cmd+Ctrl+T "open iTerm" launcher is kept here but disabled by request.
+# Flip to True to re-include it whenever a profile is built.
+ENABLE_OPEN_ITERM_SHORTCUT = False
 
 
 def _open_iterm_shortcut() -> dict:
@@ -42,7 +46,8 @@ def generate_rules(linx: bool = False) -> list:
     """
     base_rule = build_hyper_base(MARKER)
     sublayers = build_sublayers(MARKER)
-    open_iterm_shortcut = _open_iterm_shortcut()
+    # Disabled by request; retained for easy re-enable via ENABLE_OPEN_ITERM_SHORTCUT.
+    open_iterm = [_open_iterm_shortcut()] if ENABLE_OPEN_ITERM_SHORTCUT else []
 
     if not linx:
         return [
@@ -51,7 +56,7 @@ def generate_rules(linx: bool = False) -> list:
             build_double_shift_caps_lock(MARKER),
             *build_pycharm_rules(MARKER),
             swap_cmd_ctrl("d", MARKER),
-            open_iterm_shortcut,
+            *open_iterm,
         ]
 
     # LinX order matters: the Cmd+Ctrl chord rules (Volume/Brightness, iTerm) must
@@ -60,8 +65,8 @@ def generate_rules(linx: bool = False) -> list:
         build_volume_brightness_rule(MARKER),
         build_workspace_switch_rule(MARKER),
         build_screenshot_rule(MARKER),
-        build_iterm_new_tab_rule(MARKER),
-        open_iterm_shortcut,
+        build_iterm_shortcuts_rule(MARKER),
+        *open_iterm,
         build_swap_cmd_ctrl_rule(MARKER),
         build_home_end_rule(MARKER),
         base_rule.__dict__,

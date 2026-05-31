@@ -14,14 +14,14 @@ from src.rules.linx import (
 
 MARKER = "GenX"
 
-# The Cmd+Ctrl+T "open iTerm" launcher is kept here but disabled by request.
-# Flip to True to re-include it whenever a profile is built.
-ENABLE_OPEN_ITERM_SHORTCUT = False
-
 
 def _open_iterm_shortcut() -> dict:
+    # Generated in every profile but shipped with "enabled": false, so it appears as
+    # an OFF toggle in Karabiner's Complex Modifications list. Flip it on there
+    # anytime; build.py preserves the toggle state across rebuilds.
     return {
         "description": f"{MARKER}: Open iTerm with ⌘ + ⌃ + T",
+        "enabled": False,
         "manipulators": [
             {
                 "type": "basic",
@@ -46,8 +46,9 @@ def generate_rules(linx: bool = False) -> list:
     """
     base_rule = build_hyper_base(MARKER)
     sublayers = build_sublayers(MARKER)
-    # Disabled by request; retained for easy re-enable via ENABLE_OPEN_ITERM_SHORTCUT.
-    open_iterm = [_open_iterm_shortcut()] if ENABLE_OPEN_ITERM_SHORTCUT else []
+    # Always generated; shipped disabled via "enabled": false. Toggle it in the
+    # Karabiner UI — the on/off state is preserved across rebuilds (build.py).
+    open_iterm = [_open_iterm_shortcut()]
 
     if not linx:
         return [

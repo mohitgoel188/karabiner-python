@@ -62,12 +62,36 @@ def set_selected_profile(profiles: list, target_name: str) -> None:
         profile["selected"] = profile.get("name") == target_name
 
 
+def carry_over_enabled(existing_rules: list, new_rules: list) -> None:
+    """Preserve the user's per-rule on/off toggles across rebuilds.
+
+    Karabiner persists a disabled Complex Modification as a rule-level
+    ``"enabled": false`` (an enabled rule just omits the key). For every
+    regenerated rule that already exists (matched by description), copy the
+    existing enabled-state so a rebuild never silently flips a toggle the user
+    set in the UI. Brand-new rules keep whatever default the generator gave them
+    (e.g. the open-iTerm launcher ships ``"enabled": false``).
+    """
+    existing_by_desc = {
+        r["description"]: r for r in existing_rules if "description" in r
+    }
+    for rule in new_rules:
+        existing = existing_by_desc.get(rule.get("description"))
+        if existing is None:
+            continue
+        if "enabled" in existing:
+            rule["enabled"] = existing["enabled"]
+        else:
+            rule.pop("enabled", None)
+
+
 def merge_marker_rules(profile: dict, new_rules: list, override: bool) -> list:
     """Merge MARKER-tagged rules into a profile, preserving community rules.
 
     Returns the descriptions of the rules that were written, for reporting.
     """
     existing_rules = profile.get("complex_modifications", {}).get("rules", [])
+    carry_over_enabled(existing_rules, new_rules)
     if override:
         profile["complex_modifications"]["rules"] = new_rules
         return [r["description"] for r in new_rules]

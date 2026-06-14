@@ -7,6 +7,7 @@ from src.rules.linx import (
     build_volume_brightness_rule,
     build_workspace_switch_rule,
     build_iterm_shortcuts_rule,
+    build_firefox_shortcuts_rule,
     build_swap_cmd_ctrl_rule,
     build_home_end_rule,
 )
@@ -19,14 +20,16 @@ def _open_iterm_shortcut() -> dict:
     # an OFF toggle in Karabiner's Complex Modifications list. Flip it on there
     # anytime; build.py preserves the toggle state across rebuilds.
     return {
-        "description": f"{MARKER}: Open iTerm with ⌘ + ⌃ + T",
+        "description": f"{MARKER}: Open iTerm with ⌘ + ⌥ + T",
         "enabled": False,
         "manipulators": [
             {
                 "type": "basic",
                 "from": {
                     "key_code": "t",
-                    "modifiers": {"mandatory": ["left_command", "left_control"]},
+                    # ⌘+⌥ (not ⌘+⌃): in LinX the left_command<->left_control swap
+                    # makes a ⌘+⌃ trigger ambiguous, so option drives this launcher.
+                    "modifiers": {"mandatory": ["left_command", "left_option"]},
                 },
                 "to": [{"shell_command": "open -a iTerm.app"}],
             }
@@ -65,6 +68,7 @@ def generate_rules(linx: bool = False) -> list:
         build_volume_brightness_rule(MARKER),
         build_workspace_switch_rule(MARKER),
         build_iterm_shortcuts_rule(MARKER),
+        build_firefox_shortcuts_rule(MARKER),
         *open_iterm,
         build_swap_cmd_ctrl_rule(MARKER),
         build_home_end_rule(MARKER),

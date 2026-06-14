@@ -24,6 +24,13 @@ _PYCHARM_BUNDLE_IDS: list[str] = [
     "^com\\.jetbrains\\.pycharm\\.ce$",
 ]
 
+# Firefox families the Linux-style browser shortcuts apply to.
+_FIREFOX_BUNDLE_IDS: list[str] = [
+    "^org\\.mozilla\\.firefox$",
+    "^org\\.mozilla\\.firefoxdeveloperedition$",
+    "^org\\.mozilla\\.nightly$",
+]
+
 
 def build_volume_brightness_rule(marker: str) -> dict:
     """Cmd+Ctrl+Arrows -> volume/brightness (mirrors Linux Ctrl+Super+Arrows).
@@ -223,18 +230,93 @@ def build_iterm_shortcuts_rule(marker: str) -> dict:
     }
 
 
+def build_firefox_shortcuts_rule(marker: str) -> dict:
+    """Restore Linux Firefox muscle-memory that the Cmd<->Ctrl swap can't cover.
+
+    Firefox is NOT excluded from the swap, so corner-key Ctrl chords (new tab,
+    close, address bar, reload, find, reopen tab, Ctrl+1..9) already reach Firefox
+    as their Cmd equivalents. These extra mappings handle the cases the swap leaves
+    broken, scoped to Firefox only:
+
+    - Alt+Left / Alt+Right  -> Cmd+[ / Cmd+]   (back / forward; Option+arrow is
+      otherwise inert in Mac Firefox). Trade-off: Option+arrow no longer does
+      word-wise cursor motion inside Firefox text fields.
+    - Ctrl+Shift+I -> Cmd+Opt+I   (toggle Developer Tools / inspector)
+    - Ctrl+Shift+C -> Cmd+Opt+C   (element picker, the right-click "Inspect" tool)
+
+    Sidebar collapse (Linux Ctrl+Alt+Z) needs no rule here: the swap already turns
+    physical Ctrl+Alt+Z into Cmd+Alt+Z, so just bind the sidebar extension to
+    ⌘⌥Z in about:addons > Manage Extension Shortcuts.
+
+    Sits ABOVE the Cmd<->Ctrl swap and matches the PHYSICAL corner key
+    (left_control), mirroring build_workspace_switch_rule.
+    """
+    firefox_if = [
+        {
+            "type": "frontmost_application_if",
+            "bundle_identifiers": _FIREFOX_BUNDLE_IDS,
+        }
+    ]
+    return {
+        "description": (
+            f"{marker} LinX: Firefox Linux keys — Alt+Arrow = back/forward, "
+            "Ctrl+Shift+I/C = inspector/picker (corner key)"
+        ),
+        "manipulators": [
+            {
+                "type": "basic",
+                "from": {
+                    "key_code": "left_arrow",
+                    "modifiers": {"mandatory": ["left_option"]},
+                },
+                "to": [{"key_code": "open_bracket", "modifiers": ["left_command"]}],
+                "conditions": firefox_if,
+            },
+            {
+                "type": "basic",
+                "from": {
+                    "key_code": "right_arrow",
+                    "modifiers": {"mandatory": ["left_option"]},
+                },
+                "to": [{"key_code": "close_bracket", "modifiers": ["left_command"]}],
+                "conditions": firefox_if,
+            },
+            {
+                "type": "basic",
+                "from": {
+                    "key_code": "i",
+                    "modifiers": {"mandatory": ["left_control", "shift"]},
+                },
+                "to": [{"key_code": "i", "modifiers": ["left_command", "left_option"]}],
+                "conditions": firefox_if,
+            },
+            {
+                "type": "basic",
+                "from": {
+                    "key_code": "c",
+                    "modifiers": {"mandatory": ["left_control", "shift"]},
+                },
+                "to": [{"key_code": "c", "modifiers": ["left_command", "left_option"]}],
+                "conditions": firefox_if,
+            },
+        ],
+    }
+
+
 def build_linx_layer(marker: str) -> list[dict]:
     """Build the Linux muscle-memory layer rules in Karabiner evaluation order.
 
     The Cmd+Ctrl / Ctrl+Alt chord rules (Volume/Brightness, workspace switch,
-    screenshot, iTerm new-tab) come first — they must precede the Cmd/Ctrl swap or
-    it rewrites their modifiers — then the swap, then Home/End. The Cmd+Ctrl iTerm
-    launcher is assembled ahead of the swap in generate_rules(), so it is not here.
+    iTerm new-tab, Firefox Linux keys) come first — they must precede the Cmd/Ctrl
+    swap or it rewrites their modifiers — then the swap, then Home/End. The Cmd+Ctrl
+    iTerm launcher is assembled ahead of the swap in generate_rules(), so it is not
+    here.
     """
     return [
         build_volume_brightness_rule(marker),
         build_workspace_switch_rule(marker),
         build_iterm_shortcuts_rule(marker),
+        build_firefox_shortcuts_rule(marker),
         build_swap_cmd_ctrl_rule(marker),
         build_home_end_rule(marker),
     ]

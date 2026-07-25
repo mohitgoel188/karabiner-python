@@ -7,7 +7,7 @@ from rich.panel import Panel
 from rich.columns import Columns
 from rich.text import Text
 
-from src.rules import generate_rules
+from src.rules import DEFAULT_PROFILE, PROFILE_NAMES, generate_rules
 
 MODIFIER_SYMBOLS = {
     "left_command": "\u2318",
@@ -254,8 +254,10 @@ def render_legend(console: Console) -> None:
     console.print()
 
 
-def show_config(target_layer: str | None = None) -> None:
-    rules = generate_rules()
+def show_config(
+    target_layer: str | None = None, profile: str = DEFAULT_PROFILE
+) -> None:
+    rules = generate_rules(profile)
     sublayers = extract_sublayers(rules)
     standalone = extract_standalone(rules)
     console = Console()
@@ -268,7 +270,7 @@ def show_config(target_layer: str | None = None) -> None:
     console.print()
     console.print(
         Panel.fit(
-            "[bold bright_white]PoweredX[/bold bright_white]  "
+            f"[bold bright_white]{profile}[/bold bright_white]  "
             "[dim]Karabiner-Elements Configuration[/dim]\n"
             "[bright_magenta]Hyper Key[/bright_magenta] = "
             "Caps Lock \u2192 \u2303\u2325\u21e7\u2318  "
@@ -299,15 +301,21 @@ def show_config(target_layer: str | None = None) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Pretty print PoweredX Karabiner configuration."
+        description="Pretty print a generated Karabiner profile."
     )
     parser.add_argument(
         "-l", "--layer",
         metavar="LAYER",
         help="Show only a specific layer (e.g. o, b, w, s)",
     )
+    parser.add_argument(
+        "-p", "--profile",
+        choices=PROFILE_NAMES,
+        default=DEFAULT_PROFILE,
+        help=f"Profile to display (default: {DEFAULT_PROFILE})",
+    )
     args = parser.parse_args()
-    show_config(args.layer)
+    show_config(args.layer, args.profile)
 
 
 if __name__ == "__main__":

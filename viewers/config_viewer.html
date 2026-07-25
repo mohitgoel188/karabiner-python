@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>PoweredX - Karabiner Config Visualizer</title>
+<title>MacX - Karabiner Config Visualizer</title>
 <style>
   :root {
     --bg: #0a0a0f;
@@ -954,7 +954,7 @@
         <span class="shimmer">Caps Lock = Hyper Key (⌃⌥⇧⌘)</span>
       </span>
     </div>
-    <h1>PoweredX</h1>
+    <h1>MacX</h1>
     <p>Karabiner-Elements Configuration Visualizer</p>
   </div>
 
@@ -968,8 +968,12 @@
   </div>
 
   <div class="practice-hint" id="practiceHint">
-    Use <kbd>`</kbd> (backtick) as Hyper key, or hold all 4 modifiers, or just click keys on the keyboard.
-    Press <kbd>Esc</kbd> to reset.
+    <strong>Hold <kbd>`</kbd> (backtick) as Hyper</strong>, then <strong>hold</strong> the layer key,
+    then tap the action key — the layer dies the moment you let go.
+    <br>
+    <kbd>Caps Lock</kbd> cannot work here: Karabiner consumes it before the browser sees it,
+    and a lone tap sends <kbd>Esc</kbd>. You can also just click keys on the keyboard.
+    <kbd>Esc</kbd> resets.
   </div>
 
   <div class="search-wrap">
@@ -1013,7 +1017,7 @@
   </div>
   <div class="hud-result" id="hudResult">
     <div class="hud-result-action" id="hudResultAction">Press Hyper to begin...</div>
-    <div class="hud-result-hint" id="hudResultHint">Hold Caps Lock or all four modifiers</div>
+    <div class="hud-result-hint" id="hudResultHint">Hold ` (backtick) — not Caps Lock, the browser never sees it</div>
   </div>
 </div>
 
@@ -1046,7 +1050,7 @@
 
 <script>
 const SUBLAYERS = {"spacebar": {"shell_command": "open raycast://extensions/stellate/mxstbr-commands"}, "b": {"t": "URL: https://twitter.com", "p": "URL: https://mxstbr.com/cal", "y": "URL: https://news.ycombinator.com", "f": "URL: https://facebook.com", "r": "URL: https://reddit.com", "h": "URL: https://hashnode.com/draft"}, "o": {"c": "App: Visual Studio Code", "v": "App: Zed", "s": "App: Slack", "i": "App: iterm", "f": "App: Finder", "p": "App: pycharm", "w": "App: Whatsapp", "x": "App: Firefox"}, "w": {"semicolon": "Hide (\u2318H)", "y": "Window: previous-display'", "o": "Window: next-display'", "k": "Window: top-half'", "j": "Window: bottom-half'", "h": "Window: left-half'", "l": "Window: right-half'", "f": "Window: maximize'", "u": "Previous Tab (\u2303\u21e7Tab)", "i": "Next Tab (\u2303Tab)", "n": "Next Window (\u2318`)", "b": "Back (\u2318[)", "m": "Forward (\u2318])"}, "s": {"u": "Volume Up (volume_increment)", "j": "Volume Down (volume_decrement)", "i": "Brightness Up (display_brightness_increment)", "k": "Brightness Down (display_brightness_decrement)", "l": "Quit App (\u2303\u2318Q)", "p": "Play/Pause (play_or_pause)", "semicolon": "Next Track (fastforward)", "e": "Raycast: elgato-key-light/toggle", "d": "Raycast: do-not-disturb/toggle", "t": "Raycast: system/toggle-system-appearance", "c": "Raycast: system/open-camera", "v": "Voice (\u2325Space)"}, "v": {"h": "{'to': [{'key_code': 'left_arrow'}]}", "j": "{'to': [{'key_code': 'down_arrow'}]}", "k": "{'to': [{'key_code': 'up_arrow'}]}", "l": "{'to': [{'key_code': 'right_arrow'}]}", "m": "Magicmove (Homerow) (\u2303F)", "s": "Scroll Mode (Homerow) (\u2303J)", "d": "Vim Easymotion (\u21e7\u2318D)", "u": "{'to': [{'key_code': 'page_down'}]}", "i": "{'to': [{'key_code': 'page_up'}]}"}, "c": {"p": "Play/Pause (play_or_pause)", "n": "Next Track (fastforward)", "b": "Previous Track (rewind)"}, "r": {"c": "Raycast: color-picker/pick-color", "n": "Raycast: script-commands/dismiss-notifications", "l": "Raycast: mxstbr-commands/create-mxs-is-shortlink", "e": "Raycast: emoji-symbols/search-emoji-symbols", "p": "Raycast: raycast/confetti", "a": "Raycast: raycast-ai/ai-chat", "s": "Raycast: silent-mention/index", "h": "Raycast: clipboard-history/clipboard-history", "1": "Raycast: toothpick/toggle-favorite-device-1", "2": "Raycast: toothpick/toggle-favorite-device-2"}};
-const STANDALONE = [{"description": "Change double tap right \u21e7 key to caps lock", "entries": [{"trigger": "R Shift", "action": "Key: Caps", "scope": "Global"}, {"trigger": "R Shift", "action": "Toggle sublayer", "scope": "Global"}]}, {"description": "Swap Command and Control in PyCharm", "entries": [{"trigger": "Cmd", "action": "Key: Ctrl", "scope": "jetbrains.pycharm"}, {"trigger": "Ctrl", "action": "Key: Cmd", "scope": "jetbrains.pycharm"}]}, {"description": "Swap Shift+Enter \u2194 Option+Enter in PyCharm", "entries": [{"trigger": "\u21e7Enter", "action": "Key: \u2325Enter", "scope": "jetbrains.pycharm"}, {"trigger": "\u2325Enter", "action": "Key: \u21e7Enter", "scope": "jetbrains.pycharm"}]}, {"description": "Swap \u2318+D \u2194 \u2303+D (Global)", "entries": [{"trigger": "\u2318D", "action": "Key: \u2303D", "scope": "Global"}, {"trigger": "\u2303D", "action": "Key: \u2318D", "scope": "Global"}]}, {"description": "Open iTerm with \u2318 + \u2303 + T", "entries": [{"trigger": "\u2318\u2303T", "action": "App: iTerm", "scope": "Global"}]}];
+const STANDALONE = [{"description": "GenX MacX: Swap globe/fn <-> Left Control on the BUILT-IN keyboard only (external keyboards keep a real Control key). Keep this rule first.", "entries": [{"trigger": "", "action": "Key: Ctrl", "scope": "Global"}, {"trigger": "fn", "action": "Key: Ctrl", "scope": "Global"}, {"trigger": "Ctrl", "action": "{'apple_vendor_top_case_key_code': 'keyboard_fn'}", "scope": "Global"}]}, {"description": "GenX LinX: Volume & Brightness via Cmd+Ctrl+Arrows (mirrors Linux Ctrl+Super+Arrows). Keep above the Cmd/Ctrl swap rule.", "entries": [{"trigger": "\u2318\u2303up_arrow", "action": "{'consumer_key_code': 'volume_increment'}", "scope": "Global"}, {"trigger": "\u2318\u2303down_arrow", "action": "{'consumer_key_code': 'volume_decrement'}", "scope": "Global"}, {"trigger": "\u2318\u2303right_arrow", "action": "Key: display_brightness_increment", "scope": "Global"}, {"trigger": "\u2318\u2303left_arrow", "action": "Key: display_brightness_decrement", "scope": "Global"}]}, {"description": "GenX LinX: Ctrl+Alt+Arrow -> switch space left/right (physical Optimus keys; Mission Control)", "entries": [{"trigger": "\u2303\u2325left_arrow", "action": "Key: \u2303left_arrow", "scope": "Global"}, {"trigger": "\u2303\u2325right_arrow", "action": "Key: \u2303right_arrow", "scope": "Global"}]}, {"description": "GenX LinX: PC-style Home / End = line start / end (except terminals and PyCharm, which bind these in their own keymap).", "entries": [{"trigger": "home", "action": "Key: \u2318left_arrow", "scope": "apple.Terminal, googlecode.iterm2, github.wez.wezterm, ^net.kovidgoyal.kitty, ^org.alacritty, ^io.alacritty, ^dev.warp.Warp-Stable, jetbrains.pycharm, jetbrains.pycharm.ce"}, {"trigger": "end", "action": "Key: \u2318right_arrow", "scope": "apple.Terminal, googlecode.iterm2, github.wez.wezterm, ^net.kovidgoyal.kitty, ^org.alacritty, ^io.alacritty, ^dev.warp.Warp-Stable, jetbrains.pycharm, jetbrains.pycharm.ce"}]}, {"description": "Open iTerm with \u2318 + \u2325 + T", "entries": [{"trigger": "\u2318\u2325T", "action": "App: iTerm", "scope": "Global"}]}, {"description": "Change double tap right \u21e7 key to caps lock", "entries": [{"trigger": "R Shift", "action": "Key: Caps", "scope": "Global"}, {"trigger": "R Shift", "action": "Toggle sublayer", "scope": "Global"}]}];
 const KEYBOARD = [["grave_accent_and_tilde", "1", "2", "3", "4", "5", "6", "7", "8", "9", "0", "hyphen", "equal_sign"], ["q", "w", "e", "r", "t", "y", "u", "i", "o", "p", "open_bracket", "close_bracket", "backslash"], ["a", "s", "d", "f", "g", "h", "j", "k", "l", "semicolon", "quote"], ["z", "x", "c", "v", "b", "n", "m", "comma", "period", "slash"], ["spacebar"]];
 const KEY_LABELS = {"grave_accent_and_tilde": "`", "hyphen": "-", "equal_sign": "=", "open_bracket": "[", "close_bracket": "]", "backslash": "\\", "semicolon": ";", "quote": "'", "comma": ",", "period": ".", "slash": "/", "spacebar": "Space", "return_or_enter": "Enter", "left_command": "Cmd", "left_control": "Ctrl", "left_option": "Opt", "left_shift": "Shift", "right_shift": "R Shift", "caps_lock": "Caps", "escape": "Esc", "tab": "Tab", "delete_or_backspace": "Del"};
 const LAYER_COLORS = {"b": {"from": "#3b82f6", "to": "#06b6d4", "label": "Bookmarks"}, "o": {"from": "#8b5cf6", "to": "#a855f7", "label": "Open Apps"}, "w": {"from": "#f59e0b", "to": "#ef4444", "label": "Window Mgmt"}, "s": {"from": "#10b981", "to": "#14b8a6", "label": "System"}, "v": {"from": "#ec4899", "to": "#f43f5e", "label": "Vim Nav"}, "c": {"from": "#06b6d4", "to": "#3b82f6", "label": "Music"}, "r": {"from": "#f97316", "to": "#eab308", "label": "Raycast"}, "spacebar": {"from": "#6366f1", "to": "#8b5cf6", "label": "Quick Action"}};
@@ -1330,9 +1334,9 @@ function resetPractice() {
   hudArrow2.className = 'hud-arrow';
   hudSublayerVal.textContent = 'Sublayer';
   hudActionVal.textContent = 'Action Key';
-  hudResultAction.textContent = 'Press ` (backtick) as Hyper...';
+  hudResultAction.textContent = 'Hold ` (backtick) as Hyper...';
   hudResultAction.style.color = '';
-  hudResultHint.textContent = 'Or hold all 4 modifiers, or click keys';
+  hudResultHint.textContent = 'Not Caps Lock — Karabiner consumes it. Or click keys.';
   clearAllPressed();
 }
 
@@ -1482,9 +1486,12 @@ document.addEventListener('keydown', e => {
 
   // Backtick (`) as Hyper trigger
   const isBacktick = e.code === 'Backquote';
-  // CapsLock as Hyper
+  // CapsLock as Hyper. Only reachable when Karabiner is NOT intercepting caps_lock
+  // (e.g. the blank Default profile, or Karabiner quit): the generated hyper rule's
+  // `to` is just set_variable, so normally no key event ever reaches the browser.
   const isCapsLock = e.code === 'CapsLock';
-  // All 4 modifiers held (real Karabiner hyper) with any key
+  // All 4 real modifiers held. The generated Hyper layer is variable-driven and never
+  // emits these, so this only fires for a genuine hardware/other-config hyper key.
   const isRealHyper = isHyperCombo(e);
 
   // ── Hyper activation ──

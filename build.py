@@ -5,8 +5,36 @@ import subprocess
 import tempfile
 from pathlib import Path
 
-from src.rules import generate_rules, MARKER
+from src.rules import (
+    DEFAULT_PROFILE,
+    LINX,
+    MACX,
+    MARKER,
+    POWEREDX,
+    PROFILE_NAMES,
+    generate_rules,
+)
 from src.rules.linx import build_linx_layer
+from src.rules.macx import build_macx_layer
+
+# Profile-level settings the generator seeds on FIRST creation only, so anything you
+# later change in the Karabiner UI survives every rebuild.
+ANSI_KEYBOARD = {"keyboard_type_v2": "ansi"}
+
+# The Optimus reports as a keyboard AND a pointing device, and Karabiner ignores pointing
+# devices by default — without this entry it would not be grabbed at all. These ids are
+# the physical keyboard's, so they stay valid on any Mac.
+OPTIMUS_DEVICE = [
+    {
+        "identifiers": {
+            "is_keyboard": True,
+            "is_pointing_device": True,
+            "vendor_id": 12994,
+            "product_id": 26145,
+        },
+        "ignore": False,
+    }
+]
 
 KARABINER_CLI = Path(
     "/Library/Application Support/org.pqrs/Karabiner-Elements/bin/karabiner_cli"
@@ -93,7 +121,7 @@ def merge_marker_rules(profile: dict, new_rules: list, override: bool) -> list:
     existing_rules = profile.get("complex_modifications", {}).get("rules", [])
     carry_over_enabled(existing_rules, new_rules)
     if override:
-        profile["complex_modifications"]["rules"] = new_rules
+        profile.setdefault("complex_modifications", {})["rules"] = new_rules
         return [r["description"] for r in new_rules]
 
     preserved = [r for r in existing_rules if MARKER not in r.get("description", "")]
@@ -101,26 +129,46 @@ def merge_marker_rules(profile: dict, new_rules: list, override: bool) -> list:
     return [r["description"] for r in new_rules]
 
 
-def ensure_linx_profile(profiles: list, override: bool, verbose: bool) -> dict:
-    """Build or refresh the LinX profile (GenX + Linux muscle-memory layer).
+def ensure_profile(
+    profiles: list,
+    name: str,
+    override: bool,
+    verbose: bool,
+    *,
+    devices: list | None = None,
+) -> dict:
+    """Build or refresh one named profile, creating it if absent.
 
-    LinX deliberately carries no ``simple_modifications`` — the corner-key remap is
-    handled by the Left Cmd<->Ctrl swap rule, not by the PoweredX fn rotation.
+    Only ``complex_modifications.rules`` is rewritten, so hand-made profile-level settings
+    survive every rebuild: PoweredX's ``simple_modifications`` fn rotation, LinX's
+    ``devices`` block, mouse settings, and so on. ``devices`` is seeded on first creation
+    only, for the same reason.
+
+    MacX is deliberately created WITHOUT ``simple_modifications``: its globe/Control remap
+    is a device-scoped complex modification, because Karabiner reports no vendor/product id
+    for the built-in keyboard and so cannot target it from a ``devices`` block.
     """
-    linx_profile = next((p for p in profiles if p.get("name") == "LinX"), None)
-    if linx_profile is None:
-        linx_profile = {
-            "name": "LinX",
-            "virtual_hid_keyboard": {"keyboard_type_v2": "ansi"},
+    profile = next((p for p in profiles if p.get("name") == name), None)
+    if profile is None:
+        profile = {
+            "name": name,
+            "virtual_hid_keyboard": dict(ANSI_KEYBOARD),
             "complex_modifications": {"rules": []},
             "selected": False,
         }
-        profiles.append(linx_profile)
+        if devices is not None:
+            profile["devices"] = [dict(d) for d in devices]
+        profiles.append(profile)
 
-    written = merge_marker_rules(linx_profile, generate_rules(linx=True), override)
+    existing_count = len(profile.get("complex_modifications", {}).get("rules", []))
+    written = merge_marker_rules(profile, generate_rules(name), override)
     if verbose:
-        print(f"[Verbose] LinX profile now holds {len(written)} GenX/LinX rule(s).")
-    return linx_profile
+        mode = "Overrode" if override else "Merged"
+        print(
+            f"[Verbose] {mode} {name}: {len(written)} {MARKER} rule(s) "
+            f"(had {existing_count})."
+        )
+    return profile
 
 
 def get_karabiner_path() -> Path:
@@ -134,14 +182,13 @@ def modify_existing_karabiner(
     dry_run: bool = False,
     verbose: bool = False,
     override: bool = False,
-    linx: bool = False,
+    select: str = DEFAULT_PROFILE,
 ) -> None:
     """Safely merge or override Karabiner rules in karabiner/karabiner.json.
 
-    Always refreshes the PoweredX (GenX) profile. When ``linx`` is True, additionally
-    builds/refreshes a LinX profile (GenX + Linux muscle-memory layer) and selects it;
-    otherwise PoweredX stays selected and any existing LinX profile is deselected
-    (never deleted).
+    Every profile in PROFILE_NAMES (PoweredX, LinX, MacX) is rebuilt on each run so they
+    never drift apart; only which one is ``selected`` differs between invocations.
+    Profiles are never deleted, and the blank Default profile is always kept.
     """
     path = get_karabiner_path()
     if path.exists():
@@ -155,60 +202,46 @@ def modify_existing_karabiner(
     profiles = config.get("profiles", [])
     ensure_default_profile(profiles)
 
-    poweredx_profile = next((p for p in profiles if p.get("name") == "PoweredX"), None)
-    if poweredx_profile is None:
-        poweredx_profile = {
-            "name": "PoweredX",
-            "complex_modifications": {"rules": []},
-            "selected": False,
-        }
-        profiles.append(poweredx_profile)
+    rule_counts: dict[str, int] = {}
+    for name in PROFILE_NAMES:
+        profile = ensure_profile(
+            profiles,
+            name,
+            override,
+            verbose,
+            devices=OPTIMUS_DEVICE if name == MACX else None,
+        )
+        rule_counts[name] = len(profile["complex_modifications"]["rules"])
 
-    existing_count = len(
-        poweredx_profile.get("complex_modifications", {}).get("rules", [])
-    )
-    modified_rules = merge_marker_rules(
-        poweredx_profile, generate_rules(linx=False), override
-    )
-    if verbose:
-        mode = "Overrode" if override else "Merged"
-        print(f"[Verbose] {mode} PoweredX (had {existing_count} rule(s)).")
-
-    if linx:
-        ensure_linx_profile(profiles, override, verbose)
-        set_selected_profile(profiles, "LinX")
-    else:
-        set_selected_profile(profiles, "PoweredX")
-
+    set_selected_profile(profiles, select)
     config["profiles"] = profiles
-    selected = next((p["name"] for p in profiles if p.get("selected")), None)
 
-    # Validate the rules this builder adds before writing to disk. The pre-existing
-    # GenX hyper sublayers use a lenient structure Karabiner accepts at runtime but
-    # the strict linter rejects, so we lint only the Linux-muscle-memory layer here.
-    if linx and not lint_rules(build_linx_layer(MARKER), "LinX layer"):
+    # Validate the layers this builder adds before writing to disk. The GenX hyper
+    # sublayers use a lenient structure Karabiner accepts at runtime but the strict linter
+    # rejects (27 errors), so only the profile-specific layers are linted here.
+    layers = (
+        ("LinX layer", build_linx_layer(MARKER)),
+        ("MacX layer", build_macx_layer(MARKER)),
+    )
+    # A list comprehension, not a generator: report every layer even if an early one fails.
+    if not all([lint_rules(rules, label) for label, rules in layers]):
         print("⚠️  Lint reported problems above; aborting write. Fix rules and retry.")
         return
 
     if dry_run:
         print("\n--- Dry Run Output ---")
-        preview = {
-            "config_path": str(path),
-            "linx": linx,
-            "override": override,
-            "selected_profile": selected,
-            "profiles": [p.get("name") for p in profiles],
-            "poweredx_rules_modified": modified_rules,
-            "total_poweredx_rules": len(
-                poweredx_profile["complex_modifications"]["rules"]
-            ),
-        }
-        if linx:
-            linx_profile = next(p for p in profiles if p.get("name") == "LinX")
-            preview["total_linx_rules"] = len(
-                linx_profile["complex_modifications"]["rules"]
+        print(
+            json.dumps(
+                {
+                    "config_path": str(path),
+                    "override": override,
+                    "selected_profile": select,
+                    "profiles": [p.get("name") for p in profiles],
+                    "rules_per_profile": rule_counts,
+                },
+                indent=2,
             )
-        print(json.dumps(preview, indent=2))
+        )
         print("--- End of Dry Run ---\n")
         return
 
@@ -216,15 +249,19 @@ def modify_existing_karabiner(
     print(
         f"✅ {'Overrode' if override else 'Merged'} {MARKER} rules into '{path}' safely."
     )
-    if linx:
-        print("✅ Built/refreshed 'LinX' profile (GenX + Linux layer) and selected it.")
-    print(f"✅ Selected profile: {selected}.")
+    for name in PROFILE_NAMES:
+        print(f"✅ {name}: {rule_counts[name]} rule(s).")
+    print(f"✅ Selected profile: {select}.")
     print("✅ Ensured blank 'Default' profile exists.")
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Merge or override PoweredX Karabiner rules safely."
+        description=(
+            "Build the PoweredX / LinX / MacX Karabiner profiles safely. All three are "
+            f"rebuilt on every run; the flags below only choose which one is selected "
+            f"(default: {DEFAULT_PROFILE})."
+        )
     )
     parser.add_argument(
         "--dry-run", action="store_true", help="Preview changes without saving"
@@ -233,20 +270,49 @@ def main() -> None:
         "--verbose", action="store_true", help="Show detailed merge info"
     )
     parser.add_argument(
-        "--override", action="store_true", help="Completely replace PoweredX rules"
-    )
-    parser.add_argument(
-        "--linx",
+        "--override",
         action="store_true",
-        help="Also build/select the LinX profile (GenX + Linux muscle-memory layer)",
+        help=(
+            f"Replace all rules in EVERY profile instead of merging. Drops any non-"
+            f"{MARKER} rules you added by hand or from the community."
+        ),
     )
+
+    group = parser.add_mutually_exclusive_group()
+    group.add_argument(
+        "--profile",
+        choices=PROFILE_NAMES,
+        help=f"Profile to select after building (default: {DEFAULT_PROFILE})",
+    )
+    group.add_argument(
+        "--macx",
+        dest="select",
+        action="store_const",
+        const=MACX,
+        help="Select MacX (native macOS modifiers) — the default",
+    )
+    group.add_argument(
+        "--linx",
+        dest="select",
+        action="store_const",
+        const=LINX,
+        help="Select LinX (Linux muscle-memory layer)",
+    )
+    group.add_argument(
+        "--poweredx",
+        dest="select",
+        action="store_const",
+        const=POWEREDX,
+        help="Select PoweredX (the original GenX set)",
+    )
+    parser.set_defaults(select=None)
     args = parser.parse_args()
 
     modify_existing_karabiner(
         dry_run=args.dry_run,
         verbose=args.verbose,
         override=args.override,
-        linx=args.linx,
+        select=args.profile or args.select or DEFAULT_PROFILE,
     )
 
 

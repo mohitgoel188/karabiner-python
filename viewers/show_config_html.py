@@ -1,10 +1,11 @@
-"""Generate an interactive HTML visualization of PoweredX Karabiner rules."""
+"""Generate an interactive HTML visualization of a generated Karabiner profile."""
 
+import argparse
 import json
 import os
 import webbrowser
 
-from src.rules import generate_rules
+from src.rules import DEFAULT_PROFILE, PROFILE_NAMES, generate_rules
 
 QWERTY_ROWS = [
     ["grave_accent_and_tilde", "1", "2", "3", "4", "5", "6", "7", "8", "9", "0", "hyphen", "equal_sign"],
@@ -164,7 +165,9 @@ def extract_standalone_rules(rules: list) -> list:
     return standalone
 
 
-def generate_html(sublayers: dict, standalone: list) -> str:
+def generate_html(
+    sublayers: dict, standalone: list, profile: str = DEFAULT_PROFILE
+) -> str:
     sublayers_json = json.dumps(sublayers)
     standalone_json = json.dumps(standalone)
     keyboard_json = json.dumps(QWERTY_ROWS)
@@ -176,7 +179,7 @@ def generate_html(sublayers: dict, standalone: list) -> str:
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>PoweredX - Karabiner Config Visualizer</title>
+<title>{profile} - Karabiner Config Visualizer</title>
 <style>
   :root {{
     --bg: #0a0a0f;
@@ -1127,7 +1130,7 @@ def generate_html(sublayers: dict, standalone: list) -> str:
         <span class="shimmer">Caps Lock = Hyper Key (\u2303\u2325\u21e7\u2318)</span>
       </span>
     </div>
-    <h1>PoweredX</h1>
+    <h1>{profile}</h1>
     <p>Karabiner-Elements Configuration Visualizer</p>
   </div>
 
@@ -1141,8 +1144,12 @@ def generate_html(sublayers: dict, standalone: list) -> str:
   </div>
 
   <div class="practice-hint" id="practiceHint">
-    Use <kbd>`</kbd> (backtick) as Hyper key, or hold all 4 modifiers, or just click keys on the keyboard.
-    Press <kbd>Esc</kbd> to reset.
+    <strong>Hold <kbd>`</kbd> (backtick) as Hyper</strong>, then <strong>hold</strong> the layer key,
+    then tap the action key — the layer dies the moment you let go.
+    <br>
+    <kbd>Caps Lock</kbd> cannot work here: Karabiner consumes it before the browser sees it,
+    and a lone tap sends <kbd>Esc</kbd>. You can also just click keys on the keyboard.
+    <kbd>Esc</kbd> resets.
   </div>
 
   <div class="search-wrap">
@@ -1186,7 +1193,7 @@ def generate_html(sublayers: dict, standalone: list) -> str:
   </div>
   <div class="hud-result" id="hudResult">
     <div class="hud-result-action" id="hudResultAction">Press Hyper to begin...</div>
-    <div class="hud-result-hint" id="hudResultHint">Hold Caps Lock or all four modifiers</div>
+    <div class="hud-result-hint" id="hudResultHint">Hold ` (backtick) — not Caps Lock, the browser never sees it</div>
   </div>
 </div>
 
@@ -1503,9 +1510,9 @@ function resetPractice() {{
   hudArrow2.className = 'hud-arrow';
   hudSublayerVal.textContent = 'Sublayer';
   hudActionVal.textContent = 'Action Key';
-  hudResultAction.textContent = 'Press ` (backtick) as Hyper...';
+  hudResultAction.textContent = 'Hold ` (backtick) as Hyper...';
   hudResultAction.style.color = '';
-  hudResultHint.textContent = 'Or hold all 4 modifiers, or click keys';
+  hudResultHint.textContent = 'Not Caps Lock — Karabiner consumes it. Or click keys.';
   clearAllPressed();
 }}
 
@@ -1655,9 +1662,12 @@ document.addEventListener('keydown', e => {{
 
   // Backtick (`) as Hyper trigger
   const isBacktick = e.code === 'Backquote';
-  // CapsLock as Hyper
+  // CapsLock as Hyper. Only reachable when Karabiner is NOT intercepting caps_lock
+  // (e.g. the blank Default profile, or Karabiner quit): the generated hyper rule's
+  // `to` is just set_variable, so normally no key event ever reaches the browser.
   const isCapsLock = e.code === 'CapsLock';
-  // All 4 modifiers held (real Karabiner hyper) with any key
+  // All 4 real modifiers held. The generated Hyper layer is variable-driven and never
+  // emits these, so this only fires for a genuine hardware/other-config hyper key.
   const isRealHyper = isHyperCombo(e);
 
   // ── Hyper activation ──
@@ -1780,10 +1790,21 @@ document.addEventListener('keydown', e => {{
 
 
 def main():
-    rules = generate_rules()
+    parser = argparse.ArgumentParser(
+        description="Generate an interactive HTML view of a generated Karabiner profile."
+    )
+    parser.add_argument(
+        "-p", "--profile",
+        choices=PROFILE_NAMES,
+        default=DEFAULT_PROFILE,
+        help=f"Profile to visualize (default: {DEFAULT_PROFILE})",
+    )
+    args = parser.parse_args()
+
+    rules = generate_rules(args.profile)
     sublayers = extract_sublayers(rules)
     standalone = extract_standalone_rules(rules)
-    html = generate_html(sublayers, standalone)
+    html = generate_html(sublayers, standalone, args.profile)
 
     out_path = os.path.join(os.path.dirname(__file__), "config_viewer.html")
     with open(out_path, "w") as f:

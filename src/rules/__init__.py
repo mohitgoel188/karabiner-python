@@ -5,7 +5,7 @@ from src.engine import create_hyper_sublayers
 from src.helpers import swap_cmd_ctrl
 from src.rules.sublayers import build_sublayers
 from src.rules.hyper import build_hyper_base, build_double_shift_caps_lock
-from src.rules.pycharm import build_pycharm_rules
+from src.rules.pycharm import build_pycharm_rules, build_pycharm_cmd_q_rule
 from src.rules.linx import (
     build_volume_brightness_rule,
     build_workspace_switch_rule,
@@ -96,11 +96,13 @@ def _macx_rules() -> list[dict]:
 
     No Cmd<->Ctrl swap of any kind, so the PyCharm swaps, the global ⌘D<->⌃D swap, and
     LinX's iTerm/Firefox compensations (which only existed to patch holes the swap left)
-    are all omitted. The built-in-keyboard globe<->Control normaliser leads so the chord
-    rules below it see the rewritten left_control.
+    are all omitted. The one PyCharm rule kept is the ⌘Q -> ⌃Q rewrite, which is a single
+    chord rather than a modifier swap. The built-in-keyboard globe<->Control normaliser
+    leads so the chord rules below it see the rewritten left_control.
     """
     return [
         build_globe_control_swap_rule(MARKER),
+        build_pycharm_cmd_q_rule(MARKER),
         build_volume_brightness_rule(MARKER),
         build_workspace_switch_rule(MARKER),
         build_home_end_rule(MARKER),

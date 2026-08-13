@@ -19,6 +19,7 @@ from src.rules.linx import (
     build_volume_brightness_rule,
     build_workspace_switch_rule,
 )
+from src.rules.pycharm import build_pycharm_cmd_q_rule
 
 # The MacBook's globe/fn key arrives on the Apple Vendor Top Case usage page rather than
 # as a normal key_code. Karabiner also accepts the legacy `key_code: "fn"` spelling,
@@ -93,6 +94,7 @@ def build_macx_layer(marker: str) -> list[dict]:
     """
     return [
         build_globe_control_swap_rule(marker),
+        build_pycharm_cmd_q_rule(marker),
         build_volume_brightness_rule(marker),
         build_workspace_switch_rule(marker),
         build_home_end_rule(marker),

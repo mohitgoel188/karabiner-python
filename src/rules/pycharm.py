@@ -17,16 +17,28 @@ def _pycharm_frontmost_if() -> list[dict]:
 
 
 def build_pycharm_cmd_q_rule(marker: str) -> dict:
-    """Turn ⌘Q into ⌃Q inside PyCharm (quick documentation, not Quit).
+    """Rebind ⌘Q to ⌃Q (quick docs) in PyCharm, moving Quit onto ⌘⇧Q.
 
-    Profile-neutral: it rewrites only the ⌘Q chord, so it is safe in MacX where no
+    Profile-neutral: it rewrites only the Q chords, so it is safe in MacX where no
     global Cmd<->Ctrl swap exists. ``command`` (rather than ``left_command``) is
-    mandatory so the right Command key cannot slip through and quit the IDE, and no
-    ``optional: any`` is used so ⌘⇧Q and friends keep their native behaviour.
+    mandatory throughout so the right Command key cannot slip through.
+
+    The ⌘⇧Q manipulator MUST stay first. It is what keeps Quit reachable once ⌘Q is
+    taken, and it also shields PyCharm from the system ⌘⇧Q, which is macOS's Log Out
+    -- not an app-close -- so leaving it unmapped would log the user out instead.
     """
     return {
-        "description": f"{marker}: PyCharm ⌘Q -> ⌃Q (quick docs instead of Quit)",
+        "description": f"{marker}: PyCharm ⌘Q -> ⌃Q (quick docs), ⌘⇧Q -> Quit",
         "manipulators": [
+            {
+                "type": "basic",
+                "from": {
+                    "key_code": "q",
+                    "modifiers": {"mandatory": ["command", "shift"]},
+                },
+                "to": [{"key_code": "q", "modifiers": ["left_command"]}],
+                "conditions": _pycharm_frontmost_if(),
+            },
             {
                 "type": "basic",
                 "from": {
@@ -35,7 +47,7 @@ def build_pycharm_cmd_q_rule(marker: str) -> dict:
                 },
                 "to": [{"key_code": "q", "modifiers": ["left_control"]}],
                 "conditions": _pycharm_frontmost_if(),
-            }
+            },
         ],
     }
 

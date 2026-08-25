@@ -27,20 +27,21 @@ DEFAULT_PROFILE: Final = MACX
 
 
 def _open_iterm_shortcut() -> dict:
-    # Generated in every profile but shipped with "enabled": false, so it appears as
-    # an OFF toggle in Karabiner's Complex Modifications list. Flip it on there
-    # anytime; build.py preserves the toggle state across rebuilds.
+    # Ships enabled; build.py preserves whatever toggle you set in Karabiner's UI, so
+    # switching it off there survives every rebuild.
     return {
-        "description": f"{MARKER}: Open iTerm with ⌘ + ⌥ + T",
-        "enabled": False,
+        "description": f"{MARKER}: Open iTerm with ⌃ + ⌘ + T",
         "manipulators": [
             {
                 "type": "basic",
                 "from": {
                     "key_code": "t",
-                    # ⌘+⌥ (not ⌘+⌃): in LinX the left_command<->left_control swap
-                    # makes a ⌘+⌃ trigger ambiguous, so option drives this launcher.
-                    "modifiers": {"mandatory": ["left_command", "left_option"]},
+                    # ⌃+⌘ is safe under LinX's left_command<->left_control swap: the chord
+                    # needs BOTH, so swapping them leaves the same set. It is also assembled
+                    # ahead of the swap rule, so it matches the physical keys either way.
+                    # On MacX's BUILT-IN keyboard the globe/Control swap runs first, so the
+                    # ⌃ here is the CORNER (globe) key, not the one labelled Control.
+                    "modifiers": {"mandatory": ["left_control", "left_command"]},
                 },
                 "to": [{"shell_command": "open -a iTerm.app"}],
             }

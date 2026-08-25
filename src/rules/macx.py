@@ -87,10 +87,9 @@ def build_globe_control_swap_rule(marker: str) -> dict:
 def build_macx_layer(marker: str) -> list[dict]:
     """Build the MacX layer rules in Karabiner evaluation order.
 
-    The lint-safe subset, mirroring build_linx_layer: the hyper sublayers use a lenient
-    shape the strict linter rejects, and the ⌘⌥T iTerm launcher is assembled in
-    generate_rules(), so neither appears here. The globe/Control swap leads so the chord
-    rules below it see the rewritten left_control.
+    Mirrors build_linx_layer. The hyper sublayers and the ⌃⌘T iTerm launcher are
+    assembled in generate_rules(), so neither appears here. The globe/Control swap leads so
+    the chord rules below it see the rewritten left_control.
     """
     return [
         build_globe_control_swap_rule(marker),

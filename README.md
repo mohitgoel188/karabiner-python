@@ -237,7 +237,7 @@ a complex modification and not a profile-level `devices` block, which can only k
 identifiers. MacX carries no `simple_modifications`.
 
 MacX keeps `Cmd+Ctrl+Arrows` → volume/brightness, `Ctrl+Alt+Arrows` → space switching,
-PC-style Home/End, and the ⌘⌥T iTerm launcher. On the built-in keyboard the corner key is now
+PC-style Home/End, and the ⌃⌘T iTerm launcher. On the built-in keyboard the corner key is now
 Control, so volume becomes **⌘ + corner + Arrow** — the identical gesture to the Optimus.
 
 It **omits** everything that only made sense alongside a Cmd↔Ctrl swap: LinX's swap itself,

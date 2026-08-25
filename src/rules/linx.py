@@ -33,21 +33,21 @@ _FIREFOX_BUNDLE_IDS: list[str] = [
 
 
 def build_volume_brightness_rule(marker: str) -> dict:
-    """Cmd+Ctrl+Arrows -> volume/brightness (mirrors Linux Ctrl+Super+Arrows).
+    """Alt+Ctrl+Arrows -> volume/brightness.
 
     MUST sit above the Cmd/Ctrl swap rule, or the swap rewrites the modifiers first.
     """
     return {
         "description": (
-            f"{marker} LinX: Volume & Brightness via Cmd+Ctrl+Arrows "
-            "(mirrors Linux Ctrl+Super+Arrows). Keep above the Cmd/Ctrl swap rule."
+            f"{marker} LinX: Volume & Brightness via Alt+Ctrl+Arrows. "
+            "Keep above the Cmd/Ctrl swap rule."
         ),
         "manipulators": [
             {
                 "type": "basic",
                 "from": {
                     "key_code": "up_arrow",
-                    "modifiers": {"mandatory": ["left_command", "left_control"]},
+                    "modifiers": {"mandatory": ["left_option", "left_control"]},
                 },
                 "to": [{"consumer_key_code": "volume_increment"}],
             },
@@ -55,7 +55,7 @@ def build_volume_brightness_rule(marker: str) -> dict:
                 "type": "basic",
                 "from": {
                     "key_code": "down_arrow",
-                    "modifiers": {"mandatory": ["left_command", "left_control"]},
+                    "modifiers": {"mandatory": ["left_option", "left_control"]},
                 },
                 "to": [{"consumer_key_code": "volume_decrement"}],
             },
@@ -63,7 +63,7 @@ def build_volume_brightness_rule(marker: str) -> dict:
                 "type": "basic",
                 "from": {
                     "key_code": "right_arrow",
-                    "modifiers": {"mandatory": ["left_command", "left_control"]},
+                    "modifiers": {"mandatory": ["left_option", "left_control"]},
                 },
                 "to": [{"key_code": "display_brightness_increment"}],
             },
@@ -71,7 +71,7 @@ def build_volume_brightness_rule(marker: str) -> dict:
                 "type": "basic",
                 "from": {
                     "key_code": "left_arrow",
-                    "modifiers": {"mandatory": ["left_command", "left_control"]},
+                    "modifiers": {"mandatory": ["left_option", "left_control"]},
                 },
                 "to": [{"key_code": "display_brightness_decrement"}],
             },
@@ -150,34 +150,40 @@ def build_home_end_rule(marker: str) -> dict:
 
 
 def build_workspace_switch_rule(marker: str) -> dict:
-    """Ctrl+Alt+Left/Right -> switch Mission Control space left/right.
+    """Ctrl+Cmd+Left/Right -> switch Mission Control space left/right.
 
-    Matches the PHYSICAL Optimus keys (left_control + left_option) ahead of the
-    Cmd<->Ctrl swap and emits macOS-native Control+Arrow. Requires more than one
-    desktop/space and the 'Move left/right a space' shortcuts enabled under
-    System Settings > Keyboard > Keyboard Shortcuts > Mission Control.
+    Matches the PHYSICAL keys (left_control + left_command) ahead of the Cmd<->Ctrl swap.
+
+    Emits Option+Command+Arrow, because that is what 'Move left/right a space' is bound to
+    on this machine (symbolic hotkeys 79/81), NOT the macOS default Control+Arrow. Verify
+    with ``defaults read com.apple.symbolichotkeys AppleSymbolicHotKeys`` and keep the two
+    in sync — if the binding is ever reset to the ⌃ default, this ``to`` must follow, or
+    the chord fires into a shortcut nothing listens for. Also requires more than one
+    desktop/space, and the shortcuts enabled under System Settings > Keyboard >
+    Keyboard Shortcuts > Mission Control.
     """
+    space_mods = ["left_option", "left_command"]
     return {
         "description": (
-            f"{marker} LinX: Ctrl+Alt+Arrow -> switch space left/right "
-            "(physical Optimus keys; Mission Control)"
+            f"{marker} LinX: Ctrl+Cmd+Arrow -> switch space left/right "
+            "(physical keys; Mission Control)"
         ),
         "manipulators": [
             {
                 "type": "basic",
                 "from": {
                     "key_code": "left_arrow",
-                    "modifiers": {"mandatory": ["left_control", "left_option"]},
+                    "modifiers": {"mandatory": ["left_control", "left_command"]},
                 },
-                "to": [{"key_code": "left_arrow", "modifiers": ["left_control"]}],
+                "to": [{"key_code": "left_arrow", "modifiers": space_mods}],
             },
             {
                 "type": "basic",
                 "from": {
                     "key_code": "right_arrow",
-                    "modifiers": {"mandatory": ["left_control", "left_option"]},
+                    "modifiers": {"mandatory": ["left_control", "left_command"]},
                 },
-                "to": [{"key_code": "right_arrow", "modifiers": ["left_control"]}],
+                "to": [{"key_code": "right_arrow", "modifiers": space_mods}],
             },
         ],
     }

@@ -14,8 +14,6 @@ from src.rules import (
     PROFILE_NAMES,
     generate_rules,
 )
-from src.rules.linx import build_linx_layer
-from src.rules.macx import build_macx_layer
 
 # Profile-level settings the generator seeds on FIRST creation only, so anything you
 # later change in the Karabiner UI survives every rebuild.
@@ -216,13 +214,11 @@ def modify_existing_karabiner(
     set_selected_profile(profiles, select)
     config["profiles"] = profiles
 
-    # Validate the layers this builder adds before writing to disk. The GenX hyper
-    # sublayers use a lenient structure Karabiner accepts at runtime but the strict linter
-    # rejects (27 errors), so only the profile-specific layers are linted here.
-    layers = (
-        ("LinX layer", build_linx_layer(MARKER)),
-        ("MacX layer", build_macx_layer(MARKER)),
-    )
+    # Validate every generated rule — hyper sublayers included — before writing to disk.
+    # This used to lint only the LinX/MacX layers, on the theory that the sublayers used a
+    # lenient shape the strict linter rejected. They were in fact malformed, and Karabiner
+    # rejected them at runtime too; the gate is now wide enough to catch that class of bug.
+    layers = tuple((f"{name} profile", generate_rules(name)) for name in PROFILE_NAMES)
     # A list comprehension, not a generator: report every layer even if an early one fails.
     if not all([lint_rules(rules, label) for label, rules in layers]):
         print("⚠️  Lint reported problems above; aborting write. Fix rules and retry.")

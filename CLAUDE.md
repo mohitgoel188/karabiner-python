@@ -47,9 +47,9 @@ ruff check .
 
 The build pipeline flows: **src/rules/** -> **build.py** -> `karabiner/karabiner.json`
 
-- **build.py** - CLI entry point. Reads existing `karabiner.json`, then builds/refreshes every profile in `PROFILE_NAMES` via `ensure_profile()` and selects one (default `MacX`). Merge mode (default) keeps non-MARKER rules intact; override mode replaces everything. Only `complex_modifications.rules` is ever rewritten, so hand-made profile settings (PoweredX's `simple_modifications`, LinX's `devices`) survive rebuilds; `devices`/`virtual_hid_keyboard` are seeded on first creation only. A `karabiner_cli` lint gate validates the LinX and MacX layers before writing.
+- **build.py** - CLI entry point. Reads existing `karabiner.json`, then builds/refreshes every profile in `PROFILE_NAMES` via `ensure_profile()` and selects one (default `MacX`). Merge mode (default) keeps non-MARKER rules intact; override mode replaces everything. Only `complex_modifications.rules` is ever rewritten, so hand-made profile settings (PoweredX's `simple_modifications`, LinX's `devices`) survive rebuilds; `devices`/`virtual_hid_keyboard` are seeded on first creation only. A `karabiner_cli` lint gate validates **every profile's full rule set** (hyper sublayers included) before writing.
 - **src/rules/__init__.py** - `generate_rules(profile)` dispatches through `_PROFILE_RULES` to one of `_poweredx_rules()` / `_linx_rules()` / `_macx_rules()`, all sharing `_genx_core()`. Exports `MARKER` (`"GenX"`), `PROFILE_NAMES`, `DEFAULT_PROFILE`. **Rule order within each profile is semantically significant** — later rules see earlier rules' output.
-- **src/rules/sublayers.py** - Defines all hyper sublayer key mappings (b, o, w, s, v, c, r, spacebar).
+- **src/rules/sublayers.py** - Defines the hyper sublayer key mappings (b, o, w, s, v, c, r) plus direct Hyper keys (spacebar). A value that is a map of subkey -> action becomes a sublayer; a value that is itself an action becomes a direct Hyper binding.
 - **src/rules/hyper.py** - Hyper base key rule and double-shift caps lock rule.
 - **src/rules/pycharm.py** - PyCharm-specific key swaps (Cmd/Ctrl swap, Shift+Enter/Option+Enter swap). PoweredX only.
 - **src/rules/linx.py** - Linux muscle-memory layer (LinX): Left ⌘↔⌃ swap plus volume/brightness, workspace, iTerm and Firefox chord rules. MacX reuses three of these builders.
@@ -57,7 +57,7 @@ The build pipeline flows: **src/rules/** -> **build.py** -> `karabiner/karabiner
 - **tools/kbsync.py** - Snapshot / compare / verify the live config against the generated one, for folding manual UI edits back into source.
 - **src/helpers.py** - Helper functions (`app()`, `open_url()`, `window()`, `swap_cmd_ctrl()`, `tuple_dict()`) that return Karabiner action dicts. All shell commands are quoted with `shlex.quote()`.
 - **src/raycast.py** - Single helper `raycast()` that builds Raycast deep-link shell commands.
-- **src/engine.py** - `create_hyper_sublayers()` expands sublayer mappings into Karabiner manipulator rules with proper variable conditions for mutual exclusion.
+- **src/engine.py** - `create_hyper_sublayers()` expands sublayer mappings into Karabiner manipulator rules with proper variable conditions for mutual exclusion. Leaf actions come in two shapes — a bare `to` entry (`{"shell_command": ...}`) or a manipulator fragment (`{"description": ..., "to": [...]}`) — and `_split_action()` unwraps the latter. Nesting a fragment inside another `to` list makes Karabiner reject the entry with `unknown key 'to'`.
 - **src/models.py** - `Rule` dataclass for structuring Karabiner JSON.
 - **viewers/show_config.py** - Rich table viewer. Parses sublayer structure from rule descriptions.
 - **viewers/show_config_html.py** - Interactive HTML viewer with keyboard layout visualization.
@@ -65,7 +65,7 @@ The build pipeline flows: **src/rules/** -> **build.py** -> `karabiner/karabiner
 ## Key Concepts
 
 - **Hyper Key**: Caps Lock sets a `hyper` **variable** (not real modifiers — the `⌃⌥⇧⌘` in its description is cosmetic). Pressing Caps Lock alone sends Escape. Because it is variable-driven, no modifier remapping in any profile can disturb the hyper layer.
-- **Sublayers**: Each letter key (b, o, w, s, v, c, r, spacebar) under Hyper activates a "sublayer" via Karabiner variables. Sublayers are mutually exclusive (enforced by `create_hyper_sublayers()`).
+- **Sublayers**: Each letter key (b, o, w, s, v, c, r) under Hyper activates a "sublayer" via Karabiner variables; `spacebar` is a direct Hyper binding, gated on every sublayer being off. Sublayers are mutually exclusive (enforced by `create_hyper_sublayers()`).
 - **MARKER pattern**: All generated rules include `"GenX"` in their description. This lets `build.py` merge mode replace only generated rules while preserving manually-added or community rules.
 - **Descriptions are de-facto stable IDs**: `carry_over_enabled()` preserves each rule's UI on/off toggle by matching on `description`, so **renaming a description silently resets that toggle**. MacX reuses LinX builders verbatim, which is why MacX rules carry `GenX LinX:` descriptions — renaming them would reset LinX's toggles.
 - **Profiles**: `Default` (blank), `PoweredX` (original GenX), `LinX` (Linux muscle-memory, Left ⌘↔⌃ swap), `MacX` (native macOS modifiers + built-in-keyboard globe↔Ctrl swap; **the default selection**).

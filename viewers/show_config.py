@@ -132,6 +132,18 @@ def _describe_action(action) -> str:
     return str(action)[:60]
 
 
+def _manipulator_label(manip: dict) -> str | None:
+    """Human label carried on the manipulator, if it is more than the positional fallback.
+
+    Generated manipulators are described as either "GenX: System: Volume Up" (a label the
+    rule author wrote) or "GenX: Hyper s+u" (auto-generated from the key positions). Only
+    the former is worth showing; the latter tells the reader nothing the table doesn't.
+    """
+    desc = manip.get("description", "")
+    body = desc.split(": ", 1)[-1] if ": " in desc else ""
+    return body if body and not body.startswith("Hyper ") else None
+
+
 def _styled_action(action_str: str) -> Text:
     """Return a rich Text with the category prefix styled."""
     for cat, style in CAT_STYLES.items():
@@ -159,7 +171,7 @@ def extract_sublayers(rules: list) -> dict:
             to_list = manip.get("to", [])
             if not to_list:
                 continue
-            action_str = _describe_action(to_list[0])
+            action_str = _manipulator_label(manip) or _describe_action(to_list[0])
             entries.append((from_key, action_str))
         sublayers[name] = entries
     return sublayers
